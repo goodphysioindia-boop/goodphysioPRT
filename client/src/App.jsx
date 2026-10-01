@@ -16,7 +16,9 @@ import Me from './pages/Me';
 
 import AdminPortal from './pages/admin/AdminPortal';
 import AdminDoctors from './pages/admin/AdminDoctors';
+import AdminDoctorDetail from './pages/admin/DoctorDetail';
 import AdminPrts from './pages/admin/AdminPrts';
+import PrtDetail from './pages/admin/PrtDetail';
 import EditPrt from './pages/admin/EditPrt';
 import EditPatient from './pages/admin/EditPatient';
 import AdminMedicines from './pages/admin/AdminMedicines';
@@ -126,10 +128,26 @@ export default function App() {
           }
         />
         <Route
+          path="/admin/doctors/:id"
+          element={
+            <ProtectedRoute adminOnly>
+              <AdminDoctorDetail />
+            </ProtectedRoute>
+          }
+        />
+        <Route
           path="/admin/prts"
           element={
             <ProtectedRoute adminOnly>
               <AdminPrts />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/prts/:id"
+          element={
+            <ProtectedRoute adminOnly>
+              <PrtDetail />
             </ProtectedRoute>
           }
         />

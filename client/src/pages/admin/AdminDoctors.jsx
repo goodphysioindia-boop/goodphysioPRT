@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { ArrowLeft, Phone, KeyRound } from 'lucide-react';
+import { ArrowLeft, Phone, KeyRound, MapPin, Users, UserCog } from 'lucide-react';
 import api from '../../api/axios';
 import { FullPageSpinner, EmptyState, SearchBar, PageHeader } from '../../components/Ui';
 import Modal from '../../components/Modal';
@@ -15,6 +15,7 @@ export default function AdminDoctors() {
   const [params, setParams] = useSearchParams();
   const [doctors, setDoctors] = useState([]);
   const [prts, setPrts] = useState([]);
+  const [patients, setPatients] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [saving, setSaving] = useState(false);
@@ -29,9 +30,10 @@ export default function AdminDoctors() {
 
   const load = useCallback(async () => {
     try {
-      const [d, u] = await Promise.all([api.get('/doctors'), api.get('/users?role=prt')]);
+      const [d, u, p] = await Promise.all([api.get('/doctors'), api.get('/users?role=prt'), api.get('/patients')]);
       setDoctors(d.data);
       setPrts(u.data);
+      setPatients(p.data);
     } catch (err) {
       toast.error('Failed to load doctors');
     } finally {
@@ -86,6 +88,9 @@ export default function AdminDoctors() {
     }
   };
 
+  const patientCountFor = (doctorId) =>
+    patients.filter((p) => (p.assignedDoctor?._id || p.assignedDoctor) === doctorId).length;
+
   const filtered = doctors.filter((d) => !search || d.doctorName.toLowerCase().includes(search.toLowerCase()) || d.zone.toLowerCase().includes(search.toLowerCase()));
 
   const submitLogin = async (e) => {
@@ -124,29 +129,68 @@ export default function AdminDoctors() {
       {filtered.length === 0 ? (
         <EmptyState title="No doctors yet" subtitle="Add your first doctor to get started." />
       ) : (
-        <div className="space-y-2">
-          {filtered.map((d) => (
-            <div key={d._id} className="card flex items-center justify-between p-4">
-              <div className="min-w-0">
-                <p className="truncate text-sm font-bold text-slate-900">{d.doctorName}</p>
-                <p className="text-xs text-slate-400">{d.doctorId} · {d.specialty}</p>
-                <p className="flex items-center gap-1 text-xs text-slate-400 mt-0.5"><Phone className="h-3 w-3" />{d.phoneNumber}</p>
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+          {filtered.map((d) => {
+            const prtCount = (d.assignedPRTs || []).length;
+            const patientCount = patientCountFor(d._id);
+            return (
+              <div
+                key={d._id}
+                role="button"
+                tabIndex={0}
+                onClick={() => navigate(`/admin/doctors/${d._id}`)}
+                onKeyDown={(e) => e.key === 'Enter' && navigate(`/admin/doctors/${d._id}`)}
+                className="card cursor-pointer p-4 transition hover:border-brand-200 hover:shadow-pop"
+              >
+                <div className="flex items-start gap-3">
+                  <div className="grid h-11 w-11 flex-shrink-0 place-items-center rounded-full bg-brand-100 text-base font-bold text-brand-700">
+                    {d.doctorName?.replace(/^dr\.?\s*/i, '').slice(0, 1)?.toUpperCase() || 'D'}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-bold text-slate-900">{d.doctorName || 'Unnamed doctor'}</p>
+                    <p className="truncate text-xs text-slate-400">{d.doctorId} · {d.specialty}</p>
+                    <div className="mt-1.5">
+                      <span className="badge bg-brand-50 text-brand-700">{d.zone}</span>
+                    </div>
+                  </div>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setLoginForm({ loginEmail: d.email || '', password: '' });
+                      setLoginTarget(d);
+                    }}
+                    className="rounded-full p-1.5 text-slate-400 hover:bg-slate-100 hover:text-brand-600"
+                    title="Create doctor portal login"
+                  >
+                    <KeyRound className="h-4 w-4" />
+                  </button>
+                </div>
+
+                <div className="mt-3 grid grid-cols-2 gap-2 border-t border-slate-100 pt-3">
+                  <div className="flex items-center gap-2 text-xs text-slate-500">
+                    <UserCog className="h-3.5 w-3.5 text-slate-400" />
+                    {prtCount} PRT{prtCount === 1 ? '' : 's'}
+                  </div>
+                  <div className="flex items-center gap-2 text-xs text-slate-500">
+                    <Users className="h-3.5 w-3.5 text-slate-400" />
+                    {patientCount} patient{patientCount === 1 ? '' : 's'}
+                  </div>
+                  {d.phoneNumber && (
+                    <div className="flex items-center gap-2 text-xs text-slate-500">
+                      <Phone className="h-3.5 w-3.5 text-slate-400" />
+                      <span className="truncate">{d.phoneNumber}</span>
+                    </div>
+                  )}
+                  {d.clinicLocation && (
+                    <div className="flex items-center gap-2 text-xs text-slate-500">
+                      <MapPin className="h-3.5 w-3.5 text-slate-400" />
+                      <span className="truncate">{d.clinicLocation}</span>
+                    </div>
+                  )}
+                </div>
               </div>
-              <div className="flex flex-shrink-0 items-center gap-2">
-                <button
-                  onClick={() => {
-                    setLoginForm({ loginEmail: d.email || '', password: '' });
-                    setLoginTarget(d);
-                  }}
-                  className="rounded-full p-1.5 text-slate-400 hover:bg-slate-100 hover:text-brand-600"
-                  title="Create doctor portal login"
-                >
-                  <KeyRound className="h-4 w-4" />
-                </button>
-                <span className="badge bg-brand-50 text-brand-700">{d.zone}</span>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
