@@ -8,6 +8,7 @@ const {
   updateUser,
   deleteUser,
   getPrtStats,
+  setSessionAccessBulk,
 } = require('../controllers/userController');
 
 router.use(protect);
@@ -17,6 +18,8 @@ router.get('/', getAllUsers);
 router.get('/:id', getUserById);
 
 router.post('/', authorize('admin'), createUser);
+// Must stay above '/:id' so "session-access" is not read as a user id
+router.put('/session-access', authorize('admin'), setSessionAccessBulk);
 router.put('/:id', authorize('admin'), updateUser);
 router.delete('/:id', authorize('admin'), deleteUser);
 

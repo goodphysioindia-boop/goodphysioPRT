@@ -24,6 +24,9 @@ const userSchema = new mongoose.Schema(
     rbm: { type: String, trim: true },
     team: { type: String, trim: true },
     isInactive: { type: Boolean, default: false },
+
+    // Admin-controlled: lets a PRT / doctor schedule sessions (admins always can)
+    canCreateSessions: { type: Boolean, default: false },
   },
   { timestamps: true }
 );

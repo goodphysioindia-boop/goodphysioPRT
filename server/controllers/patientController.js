@@ -2,6 +2,7 @@ const Patient = require('../models/Patient');
 const Session = require('../models/Session');
 const PatientMedicine = require('../models/PatientMedicine');
 const User = require('../models/User');
+const ScheduledSession = require('../models/ScheduledSession');
 const generateId = require('../utils/generateId');
 
 // Shared ownership/visibility check, mirrors the rules in getPatientById.
@@ -72,7 +73,9 @@ exports.getPatientById = async (req, res) => {
     );
     if (denyReason) return res.status(403).json({ message: denyReason });
 
-    const sessions = await Session.find({ patient: patient._id }).sort({ sessionNumber: 1 });
+    const sessions = await Session.find({ patient: patient._id })
+      .sort({ sessionNumber: 1 })
+      .populate('scheduledSession', 'name scheduleId mode');
     const medicines = await PatientMedicine.find({ patient: patient._id }).sort({ createdAt: -1 });
 
     res.json({ patient, sessions, medicines });
@@ -237,7 +240,7 @@ exports.createSession = async (req, res) => {
     const patient = await Patient.findById(req.params.id);
     if (!patient) return res.status(404).json({ message: 'Patient not found' });
 
-    const { sessionType, exerciseName, spo2Percent, heartRate, bpMmhg, remark, meetingLink } = req.body;
+    const { sessionType, exerciseName, spo2Percent, heartRate, bpMmhg, remark, meetingLink, scheduledSession } = req.body;
     if (!sessionType) {
       return res.status(400).json({ message: 'sessionType is required' });
     }
@@ -251,6 +254,18 @@ exports.createSession = async (req, res) => {
       return res.status(400).json({ message: 'If recording vitals, spo2Percent, heartRate and bpMmhg are all required' });
     }
 
+    // Optional link to a scheduled session — the patient must be part of it.
+    let scheduled = null;
+    if (scheduledSession) {
+      if (!/^[a-f\d]{24}$/i.test(String(scheduledSession))) {
+        return res.status(400).json({ message: 'Invalid scheduled session' });
+      }
+      scheduled = await ScheduledSession.findById(scheduledSession);
+      if (!scheduled || !scheduled.patients.map(String).includes(String(patient._id))) {
+        return res.status(400).json({ message: 'This patient is not part of the selected scheduled session' });
+      }
+    }
+
     const existingCount = await Session.countDocuments({ patient: patient._id });
     const sessionId = await generateId(Session, 'sessionId', 'SES', { withYear: false, padding: 4 });
 
@@ -260,7 +275,8 @@ exports.createSession = async (req, res) => {
       sessionNumber: existingCount + 1,
       sessionType,
       exerciseName,
-      meetingLink,
+      meetingLink: meetingLink || scheduled?.meetingLink || undefined,
+      scheduledSession: scheduled ? scheduled._id : undefined,
       preVitals: { spo2Percent, heartRate, bpMmhg, remark },
       status: 'pre-only',
       recordedBy: req.user._id,

@@ -11,6 +11,7 @@ const patientRoutes = require('./routes/patientRoutes');
 const medicineRoutes = require('./routes/medicineRoutes');
 const uploadRoutes = require('./routes/uploadRoutes');
 const dashboardRoutes = require('./routes/dashboardRoutes');
+const scheduledSessionRoutes = require('./routes/scheduledSessionRoutes');
 
 const app = express();
 
@@ -37,6 +38,7 @@ app.use('/api/patients', patientRoutes);
 app.use('/api/medicines', medicineRoutes);
 app.use('/api/uploads', uploadRoutes);
 app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/scheduled-sessions', scheduledSessionRoutes);
 
 // 404 handler
 app.use('/api', (req, res) => {
@@ -54,6 +56,14 @@ const PORT = process.env.PORT || 5000;
 const start = async () => {
   await connectDB();
   await seedAdmin();
+
+  // Scheduled sessions: drop any stale/legacy indexes left on this collection (e.g. an old
+  // unique "scheduledSessionId" index) so they can't block new sessions with a duplicate-key error.
+  try {
+    await require('./models/ScheduledSession').syncIndexes();
+  } catch (err) {
+    console.error('⚠️  Could not sync scheduled-session indexes:', err.message);
+  }
   app.listen(PORT, () => {
     console.log(`🚀 PRT Health App API running on http://localhost:${PORT}`);
   });

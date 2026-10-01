@@ -84,17 +84,35 @@ export function CheckboxGroup({ label, required, options, values = [], onChange,
   );
 }
 
-export function ToggleField({ label, checked, onChange }) {
+// The switch itself. The knob is a normal flex child (not absolutely positioned),
+// so it always starts at the left edge of the track and slides exactly to the right edge.
+export function Switch({ checked, onChange, disabled = false, label }) {
   return (
-    <div className="flex items-center justify-between py-1">
+    <button
+      type="button"
+      role="switch"
+      aria-checked={!!checked}
+      aria-label={label}
+      disabled={disabled}
+      onClick={() => onChange(!checked)}
+      className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-300 ${
+        checked ? 'bg-brand-600' : 'bg-slate-300'
+      } ${disabled ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}
+    >
+      <span
+        className={`inline-block h-5 w-5 rounded-full bg-white shadow transition-transform ${
+          checked ? 'translate-x-[22px]' : 'translate-x-0.5'
+        }`}
+      />
+    </button>
+  );
+}
+
+export function ToggleField({ label, checked, onChange, disabled = false }) {
+  return (
+    <div className="flex items-center justify-between gap-3 py-1">
       <span className="text-sm font-medium text-slate-700">{label}</span>
-      <button
-        type="button"
-        onClick={() => onChange(!checked)}
-        className={`relative h-6 w-11 rounded-full transition ${checked ? 'bg-brand-600' : 'bg-slate-300'}`}
-      >
-        <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${checked ? 'translate-x-5' : 'translate-x-0.5'}`} />
-      </button>
+      <Switch checked={checked} onChange={onChange} disabled={disabled} label={label} />
     </div>
   );
 }

@@ -12,6 +12,9 @@ const sessionSchema = new mongoose.Schema(
     },
     exerciseName: { type: String, trim: true },
 
+    // Optional: the scheduled (admin-created) session this record belongs to
+    scheduledSession: { type: mongoose.Schema.Types.ObjectId, ref: 'ScheduledSession' },
+
     // Online session join link — entered by the PRT on the session form,
     // surfaced to the patient as a "Join" button.
     meetingLink: { type: String, trim: true },

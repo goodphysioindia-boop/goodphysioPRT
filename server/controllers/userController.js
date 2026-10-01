@@ -93,7 +93,7 @@ exports.createUser = async (req, res) => {
 // PUT /api/users/:id  ("Edit PRT Data")
 exports.updateUser = async (req, res) => {
   try {
-    const { name, loginEmail, reportingManagerEmail, zone, isInactive, contactNumber, state, hq } = req.body;
+    const { name, loginEmail, reportingManagerEmail, zone, isInactive, contactNumber, state, hq, canCreateSessions } = req.body;
     const user = await User.findById(req.params.id);
     if (!user) return res.status(404).json({ message: 'User not found' });
 
@@ -105,6 +105,7 @@ exports.updateUser = async (req, res) => {
     if (contactNumber !== undefined) user.contactNumber = contactNumber;
     if (state !== undefined) user.state = state;
     if (hq !== undefined) user.hq = hq;
+    if (canCreateSessions !== undefined) user.canCreateSessions = canCreateSessions === true;
 
     await user.save();
     const obj = user.toObject();
@@ -112,6 +113,33 @@ exports.updateUser = async (req, res) => {
     res.json(obj);
   } catch (err) {
     res.status(500).json({ message: 'Failed to update user', error: err.message });
+  }
+};
+
+// PUT /api/users/session-access  (Admin — grant / revoke session scheduling in bulk)
+// body: { userIds: [..], canCreateSessions: true | false }
+exports.setSessionAccessBulk = async (req, res) => {
+  try {
+    const { userIds, canCreateSessions } = req.body;
+    if (typeof canCreateSessions !== 'boolean') {
+      return res.status(400).json({ message: 'canCreateSessions must be true or false' });
+    }
+    if (!Array.isArray(userIds) || userIds.length === 0) {
+      return res.status(400).json({ message: 'Select at least one user' });
+    }
+    const ids = [...new Set(userIds.map(String))];
+    if (ids.length > 1000 || ids.some((i) => !/^[a-f\d]{24}$/i.test(i))) {
+      return res.status(400).json({ message: 'Invalid user selection' });
+    }
+
+    // Only PRTs and doctors can hold this permission (admins always can schedule)
+    const result = await User.updateMany(
+      { _id: { $in: ids }, role: { $in: ['prt', 'doctor'] } },
+      { $set: { canCreateSessions } }
+    );
+    res.json({ matched: result.matchedCount, modified: result.modifiedCount, canCreateSessions });
+  } catch (err) {
+    res.status(500).json({ message: 'Failed to update session access', error: err.message });
   }
 };
 

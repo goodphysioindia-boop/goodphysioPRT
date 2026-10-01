@@ -1,12 +1,13 @@
 import React from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, UserPlus, User, ShieldCheck, LogOut, Stethoscope, Users, Video } from 'lucide-react';
+import { LayoutDashboard, UserPlus, User, ShieldCheck, LogOut, Stethoscope, Users, Video, CalendarDays } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 const NAV_ITEMS = [
   { to: '/dashboard', label: 'My Dashboard', mobileLabel: 'Dashboard', icon: LayoutDashboard, roles: ['admin', 'prt'] },
   { to: '/register-patient', label: 'Register a Patient', mobileLabel: 'Register', icon: UserPlus, roles: ['admin', 'prt'] },
   { to: '/my-patients', label: 'My Patients', mobileLabel: 'Patients', icon: Users, roles: ['admin', 'prt', 'doctor'] },
+  { to: '/sessions', label: 'Sessions', mobileLabel: 'Sessions', icon: CalendarDays, roles: ['admin', 'prt', 'doctor'] },
   { to: '/my-sessions', label: 'Session', mobileLabel: 'Session', icon: Video, roles: ['patient'] },
   { to: '/my-profile', label: 'Profile', mobileLabel: 'Profile', icon: User, roles: ['patient'] },
   { to: '/me', label: 'Me', mobileLabel: 'Me', icon: User, roles: ['admin', 'prt', 'doctor'] },

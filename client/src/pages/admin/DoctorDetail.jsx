@@ -5,7 +5,7 @@ import { ArrowLeft, Phone, Mail, MapPin, Stethoscope, Users, UserCog, Link2 } fr
 import api from '../../api/axios';
 import { FullPageSpinner, EmptyState } from '../../components/Ui';
 import Modal from '../../components/Modal';
-import { TextField, SelectField } from '../../components/FormFields';
+import { TextField, SelectField, ToggleField } from '../../components/FormFields';
 
 function InfoRow({ label, value }) {
   return (
@@ -71,6 +71,19 @@ export default function DoctorDetail() {
   useEffect(() => {
     load();
   }, [load]);
+
+  // Admin switch on the doctor's portal login: lets them schedule sessions
+  const toggleSessionAccess = async (value) => {
+    if (!login) return;
+    setLogin((l) => ({ ...l, canCreateSessions: value }));
+    try {
+      await api.put(`/users/${login._id}`, { canCreateSessions: value });
+      toast.success(value ? 'This doctor can now schedule sessions' : 'Session scheduling turned off for this doctor');
+    } catch (err) {
+      setLogin((l) => ({ ...l, canCreateSessions: !value }));
+      toast.error(err.response?.data?.message || 'Failed to update access');
+    }
+  };
 
   // Only PRTs not already mapped to this doctor can be picked
   const mappedPrtIds = new Set(prts.map((r) => r._id));
@@ -155,6 +168,23 @@ export default function DoctorDetail() {
           <InfoRow label="Portal Login Email" value={login?.loginEmail} />
           <InfoRow label="Added On" value={doctor.createdAt ? new Date(doctor.createdAt).toLocaleDateString() : ''} />
         </div>
+      </div>
+
+      {/* Session scheduling access (applies to the doctor's portal login) */}
+      <div className="card p-5">
+        <h2 className="mb-1 text-sm font-bold text-slate-900">Session Scheduling Access</h2>
+        {login ? (
+          <>
+            <p className="mb-2 text-xs text-slate-400">
+              When on, this doctor can add sessions and edit the ones they created. They always see sessions they are selected for.
+            </p>
+            <ToggleField label="Can schedule sessions" checked={!!login.canCreateSessions} onChange={toggleSessionAccess} />
+          </>
+        ) : (
+          <p className="text-xs text-slate-400">
+            This doctor has no portal login yet. Create one from the Doctor list (key icon) to give them access to sessions.
+          </p>
+        )}
       </div>
 
       {/* Mapped PRTs */}

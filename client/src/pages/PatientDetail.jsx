@@ -9,6 +9,7 @@ import { FullPageSpinner, EmptyState } from '../components/Ui';
 import Modal from '../components/Modal';
 import { TextField, SelectField, TextareaField } from '../components/FormFields';
 import { exportPatientPdf, exportPatientExcel } from '../utils/patientExport';
+import { getSessionStatus, fmtRange, modeLabel } from '../utils/sessionSchedule';
 
 const SESSION_TYPES = ['OPD', 'ICU/IPD', 'Home Visit', 'Online', 'Consultation'];
 
@@ -32,7 +33,8 @@ export default function PatientDetail() {
   const [exportModal, setExportModal] = useState(false);
   const [exportingFormat, setExportingFormat] = useState(null); // 'pdf' | 'excel' | null
 
-  const [sessionForm, setSessionForm] = useState({ sessionType: '', exerciseName: '', spo2Percent: '', heartRate: '', bpMmhg: '', remark: '', meetingLink: '' });
+  const [sessionForm, setSessionForm] = useState({ sessionType: '', exerciseName: '', spo2Percent: '', heartRate: '', bpMmhg: '', remark: '', meetingLink: '', scheduledSession: '' });
+  const [scheduledOptions, setScheduledOptions] = useState([]); // scheduled sessions this patient is part of
   const [postForm, setPostForm] = useState({ heartRate: '', bpMmhg: '', respirationRate: '', sixMwtMeters: '', eq5d3lScore: '', remark: '' });
   const [medForm, setMedForm] = useState({ medicineName: '', dosage: '', frequency: '', notes: '' });
   const [loginForm, setLoginForm] = useState({ loginEmail: '', password: '' });
@@ -52,6 +54,15 @@ export default function PatientDetail() {
     load();
   }, [load]);
 
+  // Load the scheduled sessions this patient belongs to whenever the Add Session form opens
+  useEffect(() => {
+    if (!sessionModal) return;
+    api
+      .get('/scheduled-sessions', { params: { patient: id } })
+      .then(({ data: list }) => setScheduledOptions(list.filter((s) => getSessionStatus(s).key !== 'ended')))
+      .catch(() => setScheduledOptions([]));
+  }, [sessionModal, id]);
+
   if (loading) return <FullPageSpinner />;
   if (!data) return <EmptyState title="Patient not found" />;
 
@@ -70,7 +81,7 @@ export default function PatientDetail() {
       });
       toast.success('Session started — pre-vitals recorded');
       setSessionModal(false);
-      setSessionForm({ sessionType: '', exerciseName: '', spo2Percent: '', heartRate: '', bpMmhg: '', remark: '', meetingLink: '' });
+      setSessionForm({ sessionType: '', exerciseName: '', spo2Percent: '', heartRate: '', bpMmhg: '', remark: '', meetingLink: '', scheduledSession: '' });
       load();
     } catch (err) {
       toast.error(err.response?.data?.message || 'Failed to add session');
@@ -380,6 +391,27 @@ export default function PatientDetail() {
         <div className="rounded-xl bg-brand-50 px-3 py-2 text-xs font-semibold text-brand-700">
           Current Session No: {sessions.length + 1}
         </div>
+        {scheduledOptions.length > 0 && (
+          <>
+            <SelectField
+              label="Scheduled Session (optional)"
+              placeholder="Not linked to a scheduled session"
+              options={scheduledOptions.map((s) => ({ value: s._id, label: `${s.name} · ${modeLabel(s.mode)} · ${fmtRange(s.startDate, s.endDate)}` }))}
+              value={sessionForm.scheduledSession}
+              onChange={(e) => {
+                const picked = scheduledOptions.find((s) => s._id === e.target.value);
+                setSessionForm((f) => ({
+                  ...f,
+                  scheduledSession: e.target.value,
+                  // Pre-fill from the scheduled session; both stay editable
+                  sessionType: picked && SESSION_TYPES.includes(picked.sessionType) ? picked.sessionType : f.sessionType,
+                  meetingLink: picked?.meetingLink || f.meetingLink,
+                }));
+              }}
+            />
+            <p className="-mt-2 text-xs text-slate-400">Picking one fills in the session type and shared meeting link.</p>
+          </>
+        )}
         <SelectField label="Session Type" required options={SESSION_TYPES} value={sessionForm.sessionType} onChange={(e) => setSessionForm((f) => ({ ...f, sessionType: e.target.value }))} />
         <TextField label="Exercise" value={sessionForm.exerciseName} onChange={(e) => setSessionForm((f) => ({ ...f, exerciseName: e.target.value }))} />
         <p className="pt-1 text-xs font-bold uppercase text-slate-400">Pre Session Vitals</p>
@@ -444,6 +476,7 @@ export default function PatientDetail() {
                 ['Session ID', sessionDetailModal.sessionId || '-'],
                 ['Session Type', sessionDetailModal.sessionType],
                 ['Exercise', sessionDetailModal.exerciseName || '-'],
+                ...(sessionDetailModal.scheduledSession?.name ? [['Scheduled Session', `${sessionDetailModal.scheduledSession.name} (${sessionDetailModal.scheduledSession.scheduleId})`]] : []),
                 ['Recorded On', sessionDetailModal.createdAt ? format(new Date(sessionDetailModal.createdAt), 'd MMM yyyy, h:mm a') : '-'],
               ].map(([label, value]) => (
                 <div key={label} className="flex items-center justify-between py-2 text-sm">

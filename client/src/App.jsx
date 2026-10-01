@@ -13,6 +13,8 @@ import PatientDetail from './pages/PatientDetail';
 import PatientMyProfile from './pages/PatientMyProfile';
 import PatientSessions from './pages/PatientSessions';
 import Me from './pages/Me';
+import Sessions from './pages/Sessions';
+import SessionDetail from './pages/SessionDetail';
 
 import AdminPortal from './pages/admin/AdminPortal';
 import AdminDoctors from './pages/admin/AdminDoctors';
@@ -85,6 +87,25 @@ export default function App() {
           element={
             <ProtectedRoute adminOnly>
               <EditPatient />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Scheduled sessions — admin always; PRT / doctor see the ones they are part of
+            (creating one additionally needs admin-granted access, enforced server-side) */}
+        <Route
+          path="/sessions"
+          element={
+            <ProtectedRoute roles={['admin', 'prt', 'doctor']}>
+              <Sessions />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/sessions/:id"
+          element={
+            <ProtectedRoute roles={['admin', 'prt', 'doctor']}>
+              <SessionDetail />
             </ProtectedRoute>
           }
         />

@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { UserPlus, Users, Grid3x3, ClipboardList, Activity, FileText, Pill, ListPlus, KeyRound, Settings2 } from 'lucide-react';
+import { UserPlus, Users, Grid3x3, ClipboardList, Activity, FileText, Pill, ListPlus, KeyRound, Settings2, CalendarPlus, CalendarDays, ShieldCheck } from 'lucide-react';
 
 const SECTIONS = [
   {
@@ -17,6 +17,14 @@ const SECTIONS = [
       { label: 'View All PRT Data', icon: Users, to: '/admin/prts' },
       { label: 'View All Session Data', icon: Activity, to: '/admin/reports?tab=sessions' },
       { label: 'View All Prescription Data', icon: FileText, to: '/admin/reports?tab=medicines' },
+    ],
+  },
+  {
+    title: 'Session Scheduling',
+    buttons: [
+      { label: 'Add Session', icon: CalendarPlus, to: '/sessions?new=1' },
+      { label: 'View Scheduled Sessions', icon: CalendarDays, to: '/sessions' },
+      { label: 'Manage Session Access', icon: ShieldCheck, to: '/sessions?access=1' },
     ],
   },
   {

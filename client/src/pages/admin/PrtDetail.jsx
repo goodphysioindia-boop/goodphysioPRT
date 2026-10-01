@@ -5,7 +5,7 @@ import { ArrowLeft, Phone, Mail, MapPin, Pencil, Stethoscope, Users, Activity, L
 import api from '../../api/axios';
 import { FullPageSpinner, EmptyState } from '../../components/Ui';
 import Modal from '../../components/Modal';
-import { TextField, SelectField } from '../../components/FormFields';
+import { TextField, SelectField, ToggleField } from '../../components/FormFields';
 
 function InfoRow({ label, value }) {
   return (
@@ -67,6 +67,18 @@ export default function PrtDetail() {
   useEffect(() => {
     load();
   }, [load]);
+
+  // Admin switch: lets this PRT schedule sessions (they can then edit only their own)
+  const toggleSessionAccess = async (value) => {
+    setPrt((p) => ({ ...p, canCreateSessions: value }));
+    try {
+      await api.put(`/users/${id}`, { canCreateSessions: value });
+      toast.success(value ? 'This PRT can now schedule sessions' : 'Session scheduling turned off for this PRT');
+    } catch (err) {
+      setPrt((p) => ({ ...p, canCreateSessions: !value }));
+      toast.error(err.response?.data?.message || 'Failed to update access');
+    }
+  };
 
   // Only doctors not already mapped to this PRT can be picked
   const mappedIds = new Set(doctors.map((d) => d._id));
@@ -158,6 +170,17 @@ export default function PrtDetail() {
           <InfoRow label="Joined" value={prt.createdAt ? new Date(prt.createdAt).toLocaleDateString() : ''} />
         </div>
       </div>
+
+      {/* Session scheduling access (PRTs only) */}
+      {prt.role === 'prt' && (
+        <div className="card p-5">
+          <h2 className="mb-1 text-sm font-bold text-slate-900">Session Scheduling Access</h2>
+          <p className="mb-2 text-xs text-slate-400">
+            When on, this PRT can add sessions and edit the ones they created. They always see sessions they are selected for.
+          </p>
+          <ToggleField label="Can schedule sessions" checked={!!prt.canCreateSessions} onChange={toggleSessionAccess} />
+        </div>
+      )}
 
       {/* Mapped doctors */}
       <div>
