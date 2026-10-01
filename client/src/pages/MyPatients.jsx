@@ -6,9 +6,10 @@ import toast from 'react-hot-toast';
 import api from '../api/axios';
 import { useAuth } from '../context/AuthContext';
 import { FullPageSpinner, EmptyState, SearchBar, PageHeader } from '../components/Ui';
+import DoctorPrtPanel from '../components/DoctorPrtPanel';
 
 export default function MyPatients() {
-  const { isAdmin } = useAuth();
+  const { isAdmin, user } = useAuth();
   const navigate = useNavigate();
   const [patients, setPatients] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -34,8 +35,8 @@ export default function MyPatients() {
 
   if (loading) return <FullPageSpinner />;
 
-  return (
-    <div className="space-y-4">
+  const content = (
+    <div className="min-w-0 space-y-4">
       <PageHeader
         title="My Patients"
         right={
@@ -71,6 +72,20 @@ export default function MyPatients() {
           ))}
         </div>
       )}
+    </div>
+  );
+
+  // Admin / PRT: unchanged single-column list.
+  if (user?.role !== 'doctor') return content;
+
+  // Doctor: patient list on the left, mapped-PRT cards on the right
+  // (PRT strip sits on top on small screens).
+  return (
+    <div className="grid grid-cols-[minmax(0,1fr)] gap-5 lg:grid-cols-[minmax(0,1fr)_300px] lg:items-start lg:gap-6">
+      {content}
+      <aside className="order-first min-w-0 lg:order-none lg:sticky lg:top-0">
+        <DoctorPrtPanel />
+      </aside>
     </div>
   );
 }

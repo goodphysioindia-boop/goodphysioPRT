@@ -1,5 +1,7 @@
+const mongoose = require('mongoose');
 const Doctor = require('../models/Doctor');
 const User = require('../models/User');
+const Patient = require('../models/Patient');
 const generateId = require('../utils/generateId');
 
 // GET /api/doctors
@@ -150,5 +152,78 @@ exports.createDoctorLogin = async (req, res) => {
     res.status(201).json(obj);
   } catch (err) {
     res.status(500).json({ message: 'Failed to create doctor login', error: err.message });
+  }
+};
+
+// ---------------------------------------------------------------------------
+// Doctor portal — "My PRTs" panel (doctor role only).
+// Deliberately returns only GENERAL PRT details (name, id, zone, state, HQ) and
+// the patients that doctor shares with that PRT — never contact info, emails,
+// agency, manager, or anything about other doctors' patients.
+// ---------------------------------------------------------------------------
+
+// GET /api/doctors/me/prts  — PRTs mapped to the logged-in doctor, with a patient count each
+exports.getMyMappedPrts = async (req, res) => {
+  try {
+    if (!req.user.linkedDoctor) {
+      return res.status(404).json({ message: 'No doctor profile is linked to this login' });
+    }
+    const doctor = await Doctor.findById(req.user.linkedDoctor).populate(
+      'assignedPRTs',
+      'prtId name zone state hq isInactive'
+    );
+    if (!doctor) return res.status(404).json({ message: 'Doctor profile not found' });
+
+    const prts = (doctor.assignedPRTs || []).filter(Boolean);
+
+    const counts = await Patient.aggregate([
+      { $match: { assignedDoctor: doctor._id, addedBy: { $in: prts.map((p) => p._id) } } },
+      { $group: { _id: '$addedBy', count: { $sum: 1 } } },
+    ]);
+    const countByPrt = new Map(counts.map((c) => [String(c._id), c.count]));
+
+    res.json(
+      prts.map((p) => ({
+        _id: p._id,
+        prtId: p.prtId,
+        name: p.name,
+        zone: p.zone,
+        state: p.state,
+        hq: p.hq,
+        isInactive: p.isInactive,
+        patientCount: countByPrt.get(String(p._id)) || 0,
+      }))
+    );
+  } catch (err) {
+    res.status(500).json({ message: 'Failed to fetch your PRTs', error: err.message });
+  }
+};
+
+// GET /api/doctors/me/prts/:prtId — general details of one mapped PRT + the patients shared with this doctor
+exports.getMyMappedPrtById = async (req, res) => {
+  try {
+    const { prtId } = req.params;
+    if (!mongoose.isValidObjectId(prtId)) return res.status(400).json({ message: 'Invalid PRT id' });
+    if (!req.user.linkedDoctor) {
+      return res.status(404).json({ message: 'No doctor profile is linked to this login' });
+    }
+
+    const doctor = await Doctor.findById(req.user.linkedDoctor);
+    if (!doctor) return res.status(404).json({ message: 'Doctor profile not found' });
+
+    if (!doctor.assignedPRTs.map(String).includes(String(prtId))) {
+      return res.status(403).json({ message: 'This PRT is not mapped to you' });
+    }
+
+    const prt = await User.findById(prtId).select('prtId name zone state hq isInactive');
+    if (!prt) return res.status(404).json({ message: 'PRT not found' });
+
+    const patients = await Patient.find({ assignedDoctor: doctor._id, addedBy: prt._id })
+      .sort({ createdAt: -1 })
+      .select('patientId name age gender lungCondition createdAt');
+
+    res.json({ prt, patients });
+  } catch (err) {
+    res.status(500).json({ message: 'Failed to fetch PRT details', error: err.message });
   }
 };
