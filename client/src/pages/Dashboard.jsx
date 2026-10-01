@@ -72,6 +72,8 @@ export default function Dashboard() {
 
   if (loading) return <FullPageSpinner />;
 
+  const isAdmin = user?.role === 'admin';
+
   const filteredVisits = visits.filter(
     (v) =>
       !search ||
@@ -87,12 +89,13 @@ export default function Dashboard() {
       </div>
 
       {/* Summary cards */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <div className={`grid grid-cols-2 gap-3 ${isAdmin ? 'sm:grid-cols-4' : 'sm:grid-cols-3'}`}>
         {[
           { label: 'Patients', value: summary?.totalPatients ?? 0 },
           { label: 'Sessions', value: summary?.totalSessions ?? 0 },
           { label: 'Doctors', value: summary?.totalDoctors ?? 0 },
-          { label: 'PRTs', value: summary?.totalPrts ?? 0 },
+          // System-wide PRT count is admin-only
+          ...(isAdmin ? [{ label: 'PRTs', value: summary?.totalPrts ?? 0 }] : []),
         ].map((c) => (
           <div key={c.label} className="card p-4">
             <p className="text-2xl font-extrabold text-slate-900">{c.value}</p>

@@ -12,6 +12,8 @@ const {
   createDoctorLogin,
   getMyMappedPrts,
   getMyMappedPrtById,
+  getMyDoctors,
+  getMyDoctorById,
 } = require('../controllers/doctorController');
 
 router.use(protect);
@@ -19,6 +21,10 @@ router.use(protect);
 // Doctor portal: PRTs mapped to the logged-in doctor (kept above '/:id' on purpose)
 router.get('/me/prts', authorize('doctor'), getMyMappedPrts);
 router.get('/me/prts/:prtId', authorize('doctor'), getMyMappedPrtById);
+
+// PRT portal: doctors related to the logged-in PRT (general details only; also above '/:id')
+router.get('/me/doctors', authorize('prt'), getMyDoctors);
+router.get('/me/doctors/:doctorId', authorize('prt'), getMyDoctorById);
 
 router.get('/', getAllDoctors); // all logged-in roles can view (needed for patient registration dropdown)
 router.get('/:id', getDoctorById);

@@ -6,6 +6,9 @@ const Visit = require('../models/Visit');
 const PatientMedicine = require('../models/PatientMedicine');
 
 // GET /api/dashboard/summary
+// Admin: system-wide totals.
+// PRT: only numbers that belong to that PRT (their patients, the sessions of
+// those patients, and the doctors they are mapped to / registered patients with).
 exports.getSummary = async (req, res) => {
   try {
     const isAdmin = req.user.role === 'admin';
@@ -14,10 +17,21 @@ exports.getSummary = async (req, res) => {
     const totalPatients = await Patient.countDocuments(scopeFilter);
     const patientIds = await Patient.find(scopeFilter).distinct('_id');
     const totalSessions = await Session.countDocuments({ patient: { $in: patientIds } });
-    const totalDoctors = await Doctor.countDocuments();
-    const totalPrts = await User.countDocuments({ role: 'prt' });
 
-    res.json({ totalPatients, totalSessions, totalDoctors, totalPrts });
+    if (isAdmin) {
+      const totalDoctors = await Doctor.countDocuments();
+      const totalPrts = await User.countDocuments({ role: 'prt' });
+      return res.json({ totalPatients, totalSessions, totalDoctors, totalPrts });
+    }
+
+    // Doctors related to this PRT = doctors mapped to them by admin
+    // + doctors assigned to the patients they registered.
+    const mappedDoctorIds = await Doctor.find({ assignedPRTs: req.user._id }).distinct('_id');
+    const patientDoctorIds = await Patient.find(scopeFilter).distinct('assignedDoctor');
+    const totalDoctors = new Set([...mappedDoctorIds, ...patientDoctorIds].map(String)).size;
+
+    // totalPrts is intentionally not sent to PRTs (it is a system-wide figure)
+    res.json({ totalPatients, totalSessions, totalDoctors });
   } catch (err) {
     res.status(500).json({ message: 'Failed to build dashboard summary', error: err.message });
   }

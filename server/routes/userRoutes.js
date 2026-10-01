@@ -13,7 +13,7 @@ const {
 
 router.use(protect);
 
-router.get('/prt-stats', getPrtStats); // any logged-in user can view dashboard stats
+router.get('/prt-stats', authorize('admin', 'prt'), getPrtStats); // admin: all PRTs, PRT: own row only
 router.get('/', getAllUsers);
 router.get('/:id', getUserById);
 

@@ -7,6 +7,7 @@ import api from '../api/axios';
 import { useAuth } from '../context/AuthContext';
 import { FullPageSpinner, EmptyState, SearchBar, PageHeader } from '../components/Ui';
 import DoctorPrtPanel from '../components/DoctorPrtPanel';
+import PrtDoctorPanel from '../components/PrtDoctorPanel';
 
 export default function MyPatients() {
   const { isAdmin, user } = useAuth();
@@ -75,16 +76,17 @@ export default function MyPatients() {
     </div>
   );
 
-  // Admin / PRT: unchanged single-column list.
-  if (user?.role !== 'doctor') return content;
+  // Admin: unchanged single-column list.
+  if (user?.role !== 'doctor' && user?.role !== 'prt') return content;
 
-  // Doctor: patient list on the left, mapped-PRT cards on the right
-  // (PRT strip sits on top on small screens).
+  // Doctor: patient list on the left, mapped-PRT cards on the right.
+  // PRT: patient list on the left, their doctors' cards on the right.
+  // (The card strip sits on top on small screens.)
   return (
     <div className="grid grid-cols-[minmax(0,1fr)] gap-5 lg:grid-cols-[minmax(0,1fr)_300px] lg:items-start lg:gap-6">
       {content}
       <aside className="order-first min-w-0 lg:order-none lg:sticky lg:top-0">
-        <DoctorPrtPanel />
+        {user?.role === 'doctor' ? <DoctorPrtPanel /> : <PrtDoctorPanel />}
       </aside>
     </div>
   );

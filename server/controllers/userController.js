@@ -155,9 +155,12 @@ exports.deleteUser = async (req, res) => {
 };
 
 // GET /api/users/prt-stats  (Dashboard "Registration Data" table: PRT | Total Patients | Total Sessions)
+// Scoped by role: admin = all PRTs, PRT = only themselves.
 exports.getPrtStats = async (req, res) => {
   try {
-    const prts = await User.find({ role: 'prt' }).lean();
+    // Admin sees every PRT; a PRT only ever sees their own row.
+    const prtFilter = req.user.role === 'admin' ? { role: 'prt' } : { _id: req.user._id, role: 'prt' };
+    const prts = await User.find(prtFilter).lean();
 
     const stats = await Promise.all(
       prts.map(async (prt) => {
