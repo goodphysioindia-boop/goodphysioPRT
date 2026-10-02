@@ -24,6 +24,28 @@ const patientSchema = new mongoose.Schema(
     consentFormUrl: { type: String, required: true },
     consentFormPublicId: { type: String },
 
+    // Subscription: every patient starts with a 7-day free trial from the start
+    // date chosen at registration; staff can then activate / extend it (with the
+    // payment mode). Dates are plain calendar dates (YYYY-MM-DD), end inclusive.
+    // A patient with no subscription data at all (registered before this existed)
+    // is treated as active.
+    subscription: {
+      plan: { type: String, enum: ['trial', 'paid'] },
+      startDate: { type: String },
+      endDate: { type: String },
+      paymentMode: { type: String, enum: ['Online', 'Cash'] },
+    },
+    subscriptionHistory: [
+      {
+        plan: { type: String, enum: ['trial', 'paid'] },
+        startDate: String,
+        endDate: String,
+        paymentMode: { type: String, enum: ['Online', 'Cash'] },
+        recordedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+        recordedAt: { type: Date, default: Date.now },
+      },
+    ],
+
     // Ownership
     addedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
     addedByPrtEmail: { type: String, required: true },

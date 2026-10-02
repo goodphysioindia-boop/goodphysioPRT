@@ -6,6 +6,7 @@ import api from '../../api/axios';
 import { FullPageSpinner, EmptyState, SearchBar, PageHeader } from '../../components/Ui';
 import Modal from '../../components/Modal';
 import { TextField, SelectField } from '../../components/FormFields';
+import { RatingSummary } from '../../components/RatingCard';
 
 const ZONES = ['East', 'West', 'North', 'South', 'Central'];
 const ROLES = ['prt', 'admin'];
@@ -20,6 +21,7 @@ export default function AdminPrts() {
   const [saving, setSaving] = useState(false);
   const [openMenuId, setOpenMenuId] = useState(null);
   const [doctors, setDoctors] = useState([]);
+  const [prtRatings, setPrtRatings] = useState({}); // PRT id -> { average, count }
 
   const addOpen = params.get('add') === '1';
 
@@ -38,6 +40,7 @@ export default function AdminPrts() {
       setUsers(usersData);
       setPatients(patientsData);
       setDoctors(doctorsData);
+      api.get('/users/prt-ratings').then(({ data }) => setPrtRatings(data.byPrt || {})).catch(() => {});
     } catch (err) {
       toast.error('Failed to load PRTs');
     } finally {
@@ -168,6 +171,7 @@ export default function AdminPrts() {
                     <Stethoscope className="h-3.5 w-3.5 text-slate-400" />
                     {doctorCount} doctor{doctorCount === 1 ? '' : 's'}
                   </div>
+                  <RatingSummary rating={prtRatings[u._id]} />
                   {u.contactNumber && (
                     <div className="flex items-center gap-2 text-xs text-slate-500">
                       <Phone className="h-3.5 w-3.5 text-slate-400" />

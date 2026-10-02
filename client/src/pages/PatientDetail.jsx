@@ -1,15 +1,18 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { format } from 'date-fns';
+import { format, addDays, parseISO } from 'date-fns';
 import toast from 'react-hot-toast';
-import { ArrowLeft, MoreVertical, Plus, Activity, Pill, KeyRound, Video, Download, FileText, FileSpreadsheet } from 'lucide-react';
+import { ArrowLeft, MoreVertical, Plus, Activity, Pill, KeyRound, Video, Download, FileText, FileSpreadsheet, CreditCard } from 'lucide-react';
 import api from '../api/axios';
 import { useAuth } from '../context/AuthContext';
 import { FullPageSpinner, EmptyState } from '../components/Ui';
 import Modal from '../components/Modal';
-import { TextField, SelectField, TextareaField } from '../components/FormFields';
+import { TextField, SelectField, TextareaField, RadioGroup } from '../components/FormFields';
 import { exportPatientPdf, exportPatientExcel } from '../utils/patientExport';
-import { getSessionStatus, fmtRange, modeLabel } from '../utils/sessionSchedule';
+import ScheduledSessionPicker from '../components/ScheduledSessionPicker';
+import { SubscriptionBadge, SubscriptionBanner } from '../components/SubscriptionBadge';
+import { Stars } from '../components/RatingCard';
+import { getSubscriptionStatus, fmtSubDate, todayStr, PAYMENT_MODES } from '../utils/subscription';
 
 const SESSION_TYPES = ['OPD', 'ICU/IPD', 'Home Visit', 'Online', 'Consultation'];
 
@@ -30,11 +33,14 @@ export default function PatientDetail() {
   const [deleteModal, setDeleteModal] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [ratings, setRatings] = useState(null); // admin only: { ratings, count, average }
+  const [subModal, setSubModal] = useState(false);
+  const [subForm, setSubForm] = useState({ startDate: '', endDate: '', paymentMode: '' });
   const [exportModal, setExportModal] = useState(false);
   const [exportingFormat, setExportingFormat] = useState(null); // 'pdf' | 'excel' | null
 
-  const [sessionForm, setSessionForm] = useState({ sessionType: '', exerciseName: '', spo2Percent: '', heartRate: '', bpMmhg: '', remark: '', meetingLink: '', scheduledSession: '' });
-  const [scheduledOptions, setScheduledOptions] = useState([]); // scheduled sessions this patient is part of
+  const [sessionForm, setSessionForm] = useState({ sessionDate: format(new Date(), "yyyy-MM-dd'T'HH:mm"), sessionType: '', exerciseName: '', spo2Percent: '', heartRate: '', bpMmhg: '', remark: '', meetingLink: '', scheduledSession: '' });
+  const [linkLocked, setLinkLocked] = useState(false); // true while the picked scheduled session supplies the link
   const [postForm, setPostForm] = useState({ heartRate: '', bpMmhg: '', respirationRate: '', sixMwtMeters: '', eq5d3lScore: '', remark: '' });
   const [medForm, setMedForm] = useState({ medicineName: '', dosage: '', frequency: '', notes: '' });
   const [loginForm, setLoginForm] = useState({ loginEmail: '', password: '' });
@@ -54,37 +60,66 @@ export default function PatientDetail() {
     load();
   }, [load]);
 
-  // Load the scheduled sessions this patient belongs to whenever the Add Session form opens
+  // Patient star ratings are for admins only
   useEffect(() => {
-    if (!sessionModal) return;
-    api
-      .get('/scheduled-sessions', { params: { patient: id } })
-      .then(({ data: list }) => setScheduledOptions(list.filter((s) => getSessionStatus(s).key !== 'ended')))
-      .catch(() => setScheduledOptions([]));
-  }, [sessionModal, id]);
+    if (!isAdmin) return;
+    api.get(`/patients/${id}/ratings`).then(({ data }) => setRatings(data)).catch(() => {});
+  }, [id, isAdmin]);
 
   if (loading) return <FullPageSpinner />;
   if (!data) return <EmptyState title="Patient not found" />;
 
   const { patient, sessions, medicines } = data;
+  const subStatus = getSubscriptionStatus(patient);
+  const subRunning = subStatus.key === 'active' || subStatus.key === 'expiring';
 
   const submitSession = async (e) => {
     e.preventDefault();
     const { sessionType, spo2Percent, heartRate, bpMmhg } = sessionForm;
     if (!sessionType || !spo2Percent || !heartRate || !bpMmhg) return toast.error('Please fill all required vitals');
+    if (!sessionForm.sessionDate) return toast.error('Please set the session date');
     setSaving(true);
     try {
       await api.post(`/patients/${id}/sessions`, {
         ...sessionForm,
+        sessionDate: new Date(sessionForm.sessionDate).toISOString(),
         spo2Percent: Number(spo2Percent),
         heartRate: Number(heartRate),
       });
       toast.success('Session started — pre-vitals recorded');
       setSessionModal(false);
-      setSessionForm({ sessionType: '', exerciseName: '', spo2Percent: '', heartRate: '', bpMmhg: '', remark: '', meetingLink: '', scheduledSession: '' });
+      setSessionForm({ sessionDate: format(new Date(), "yyyy-MM-dd'T'HH:mm"), sessionType: '', exerciseName: '', spo2Percent: '', heartRate: '', bpMmhg: '', remark: '', meetingLink: '', scheduledSession: '' });
+      setLinkLocked(false);
       load();
     } catch (err) {
       toast.error(err.response?.data?.message || 'Failed to add session');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Opens the Activate / Extend popup. Extending a running subscription starts the
+  // new period the day after the current one ends; otherwise it starts today.
+  const openSubscriptionModal = () => {
+    const start = subRunning ? format(addDays(parseISO(subStatus.endDate), 1), 'yyyy-MM-dd') : todayStr();
+    setSubForm({ startDate: start, endDate: '', paymentMode: '' });
+    setSubModal(true);
+  };
+
+  const submitSubscription = async (e) => {
+    e.preventDefault();
+    const { startDate, endDate, paymentMode } = subForm;
+    if (!startDate || !endDate) return toast.error('Start date and end date are required');
+    if (endDate < startDate) return toast.error('End date cannot be before the start date');
+    if (!paymentMode) return toast.error('Please select how the payment was made');
+    setSaving(true);
+    try {
+      await api.post(`/patients/${id}/subscription`, subForm);
+      toast.success(subRunning ? 'Subscription extended' : 'Subscription activated');
+      setSubModal(false);
+      load();
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to update subscription');
     } finally {
       setSaving(false);
     }
@@ -270,6 +305,63 @@ export default function PatientDetail() {
         ))}
       </div>
 
+      {/* Subscription */}
+      <div className="space-y-3">
+        <SubscriptionBanner status={subStatus} />
+        <div className="card divide-y divide-slate-50 px-4">
+          <div className="flex items-center justify-between py-2.5 text-sm">
+            <span className="flex items-center gap-1.5 text-slate-400">
+              <CreditCard className="h-4 w-4" /> Subscription
+            </span>
+            <SubscriptionBadge status={subStatus} />
+          </div>
+          {subStatus.key !== 'none' &&
+            [
+              ['Plan', subStatus.planLabel],
+              ['Valid From', fmtSubDate(subStatus.startDate)],
+              ['Valid Till', fmtSubDate(subStatus.endDate)],
+              ...(patient.subscription?.paymentMode ? [['Payment', patient.subscription.paymentMode]] : []),
+            ].map(([label, value]) => (
+              <div key={label} className="flex items-center justify-between py-2.5 text-sm">
+                <span className="text-slate-400">{label}</span>
+                <span className="max-w-[60%] text-right font-medium text-slate-700">{value}</span>
+              </div>
+            ))}
+        </div>
+        {canWrite && (
+          <button onClick={openSubscriptionModal} className="btn-secondary w-full">
+            <CreditCard className="h-4 w-4" /> {subRunning ? 'Extend Subscription' : 'Activate Subscription'}
+          </button>
+        )}
+      </div>
+
+      {isAdmin && ratings && (
+        <div className="card px-4 py-3">
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-slate-400">Patient Rating</span>
+            {ratings.count > 0 ? (
+              <span className="flex items-center gap-2">
+                <Stars value={ratings.average} />
+                <span className="font-semibold text-slate-700">{ratings.average.toFixed(1)}</span>
+                <span className="text-xs text-slate-400">({ratings.count})</span>
+              </span>
+            ) : (
+              <span className="text-xs text-slate-400">Not rated yet</span>
+            )}
+          </div>
+          {ratings.count > 0 && (
+            <div className="mt-2 max-h-40 divide-y divide-slate-50 overflow-y-auto border-t border-slate-50">
+              {ratings.ratings.map((r) => (
+                <div key={r._id} className="flex items-center justify-between py-1.5 text-xs">
+                  <Stars value={r.stars} size="h-3.5 w-3.5" />
+                  <span className="text-slate-400">{format(parseISO(r.day), 'd MMM yyyy')}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       <div>
         <p className="field-label">Patient Consent Form</p>
         <a href={patient.consentFormUrl} target="_blank" rel="noreferrer" className="block overflow-hidden rounded-2xl border border-slate-200">
@@ -279,7 +371,14 @@ export default function PatientDetail() {
 
       {canWrite && (
         <div className="flex gap-3">
-          <button onClick={() => setSessionModal(true)} className="btn-primary flex-1">
+          <button
+            onClick={() => {
+              // Default the session date to "now" each time the form opens (still editable)
+              setSessionForm((f) => ({ ...f, sessionDate: format(new Date(), "yyyy-MM-dd'T'HH:mm") }));
+              setSessionModal(true);
+            }}
+            className="btn-primary flex-1"
+          >
             <Plus className="h-4 w-4" /> Add Session
           </button>
           <button onClick={() => setMedicineModal(true)} className="btn-secondary flex-1">
@@ -391,28 +490,24 @@ export default function PatientDetail() {
         <div className="rounded-xl bg-brand-50 px-3 py-2 text-xs font-semibold text-brand-700">
           Current Session No: {sessions.length + 1}
         </div>
-        {scheduledOptions.length > 0 && (
-          <>
-            <SelectField
-              label="Scheduled Session (optional)"
-              placeholder="Not linked to a scheduled session"
-              options={scheduledOptions.map((s) => ({ value: s._id, label: `${s.name} · ${modeLabel(s.mode)} · ${fmtRange(s.startDate, s.endDate)}` }))}
-              value={sessionForm.scheduledSession}
-              onChange={(e) => {
-                const picked = scheduledOptions.find((s) => s._id === e.target.value);
-                setSessionForm((f) => ({
-                  ...f,
-                  scheduledSession: e.target.value,
-                  // Pre-fill from the scheduled session; both stay editable
-                  sessionType: picked && SESSION_TYPES.includes(picked.sessionType) ? picked.sessionType : f.sessionType,
-                  meetingLink: picked?.meetingLink || f.meetingLink,
-                }));
-              }}
-            />
-            <p className="-mt-2 text-xs text-slate-400">Picking one fills in the session type and shared meeting link.</p>
-          </>
-        )}
+        <ScheduledSessionPicker
+          active={sessionModal}
+          patientId={id}
+          value={sessionForm.scheduledSession}
+          onPick={(picked) => {
+            const sessionLink = picked?.meetingLink || '';
+            setSessionForm((f) => ({
+              ...f,
+              scheduledSession: picked?._id || '',
+              // Session type is pre-filled (still editable); the link is taken from the session and locked
+              sessionType: picked && SESSION_TYPES.includes(picked.sessionType) ? picked.sessionType : f.sessionType,
+              meetingLink: sessionLink || (linkLocked ? '' : f.meetingLink),
+            }));
+            setLinkLocked(!!sessionLink);
+          }}
+        />
         <SelectField label="Session Type" required options={SESSION_TYPES} value={sessionForm.sessionType} onChange={(e) => setSessionForm((f) => ({ ...f, sessionType: e.target.value }))} />
+        <TextField label="Session Date & Time" required type="datetime-local" value={sessionForm.sessionDate} onChange={(e) => setSessionForm((f) => ({ ...f, sessionDate: e.target.value }))} />
         <TextField label="Exercise" value={sessionForm.exerciseName} onChange={(e) => setSessionForm((f) => ({ ...f, exerciseName: e.target.value }))} />
         <p className="pt-1 text-xs font-bold uppercase text-slate-400">Pre Session Vitals</p>
         <TextField label="SPO2 (Pre-Session) %" required type="number" value={sessionForm.spo2Percent} onChange={(e) => setSessionForm((f) => ({ ...f, spo2Percent: e.target.value }))} />
@@ -424,8 +519,35 @@ export default function PatientDetail() {
           value={sessionForm.meetingLink}
           onChange={(e) => setSessionForm((f) => ({ ...f, meetingLink: e.target.value }))}
           placeholder="https://meet.google.com/xxx-xxxx-xxx"
+          disabled={linkLocked}
         />
-        <p className="-mt-2 text-xs text-slate-400">This link will appear as a "Join" button on the patient's Sessions tab.</p>
+        <p className="-mt-2 text-xs text-slate-400">
+          {linkLocked
+            ? 'Using the selected session\'s shared link — it can only be changed by editing the scheduled session.'
+            : 'This link will appear as a "Join" button on the patient\'s Sessions tab.'}
+        </p>
+      </Modal>
+
+      {/* Activate / Extend Subscription Modal */}
+      <Modal
+        open={subModal}
+        onClose={() => setSubModal(false)}
+        title={subRunning ? 'Extend Subscription' : 'Activate Subscription'}
+        footer={
+          <>
+            <button className="btn-secondary flex-1" onClick={() => setSubModal(false)}>Cancel</button>
+            <button className="btn-primary flex-1" disabled={saving} onClick={submitSubscription}>
+              {saving ? 'Saving…' : subRunning ? 'Extend' : 'Activate'}
+            </button>
+          </>
+        }
+      >
+        <p className="text-xs text-slate-400">
+          Set the new subscription period for {patient.name}. Their sessions unlock from the start date and lock again after the end date.
+        </p>
+        <TextField label="Start Date" required type="date" value={subForm.startDate} onChange={(e) => setSubForm((f) => ({ ...f, startDate: e.target.value }))} />
+        <TextField label="End Date" required type="date" min={subForm.startDate || undefined} value={subForm.endDate} onChange={(e) => setSubForm((f) => ({ ...f, endDate: e.target.value }))} />
+        <RadioGroup label="Payment Mode" required options={PAYMENT_MODES} value={subForm.paymentMode} onChange={(v) => setSubForm((f) => ({ ...f, paymentMode: v }))} />
       </Modal>
 
       {/* Post-Session Vitals Modal */}
@@ -477,7 +599,7 @@ export default function PatientDetail() {
                 ['Session Type', sessionDetailModal.sessionType],
                 ['Exercise', sessionDetailModal.exerciseName || '-'],
                 ...(sessionDetailModal.scheduledSession?.name ? [['Scheduled Session', `${sessionDetailModal.scheduledSession.name} (${sessionDetailModal.scheduledSession.scheduleId})`]] : []),
-                ['Recorded On', sessionDetailModal.createdAt ? format(new Date(sessionDetailModal.createdAt), 'd MMM yyyy, h:mm a') : '-'],
+                ['Session Date', (sessionDetailModal.sessionDate || sessionDetailModal.createdAt) ? format(new Date(sessionDetailModal.sessionDate || sessionDetailModal.createdAt), 'd MMM yyyy, h:mm a') : '-'],
               ].map(([label, value]) => (
                 <div key={label} className="flex items-center justify-between py-2 text-sm">
                   <span className="text-slate-400">{label}</span>

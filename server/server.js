@@ -65,7 +65,7 @@ const start = async () => {
     console.error('⚠️  Could not sync scheduled-session indexes:', err.message);
   }
   app.listen(PORT, () => {
-    console.log(`🚀 PRT Health App API running on http://localhost:${PORT}`);
+    console.log(`🚀 Good Physio App API running on http://localhost:${PORT}`);
   });
 };
 

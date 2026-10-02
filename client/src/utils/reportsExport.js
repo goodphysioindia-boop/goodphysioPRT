@@ -58,7 +58,7 @@ function zebraAndBorders(ws, startRow, endRow, endCol) {
  */
 export async function exportReportsExcel(rows, tab, searchTerm = '') {
   const wb = new ExcelJS.Workbook();
-  wb.creator = 'PRT Health';
+  wb.creator = 'Good Physio';
   wb.created = new Date();
 
   const isSessions = tab === 'sessions';
@@ -74,7 +74,7 @@ export async function exportReportsExcel(rows, tab, searchTerm = '') {
   // Title banner
   ws.mergeCells(1, 1, 1, headers.length);
   const titleCell = ws.getCell(1, 1);
-  titleCell.value = `PRT Health — ${sheetTitle}`;
+  titleCell.value = `Good Physio — ${sheetTitle}`;
   titleCell.font = { bold: true, size: 16, color: { argb: `FF${BRAND_DARK_HEX}` } };
   ws.getRow(1).height = 30;
 

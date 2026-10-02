@@ -1,6 +1,7 @@
 import React from 'react';
 import { CalendarDays, Clock, Video, Users, Stethoscope, UserCog, AlertTriangle } from 'lucide-react';
-import { getSessionStatus, fmtRange, fmtDate, modeLabel } from '../utils/sessionSchedule';
+import { getSessionStatus, getJoinState, fmtRange, fmtDate, modeLabel } from '../utils/sessionSchedule';
+import useNow from '../utils/useNow';
 
 const TONES = {
   upcoming: 'bg-sky-50 text-sky-700',
@@ -31,9 +32,21 @@ export function EndingAlert({ session, status }) {
   );
 }
 
+// Disabled stand-in for the Join button, with the reason it can't be used right now
+function LockedJoin({ label }) {
+  return (
+    <button disabled className="btn-secondary w-full opacity-60" onClick={(e) => e.stopPropagation()}>
+      <Clock className="h-4 w-4" /> {label}
+    </button>
+  );
+}
+
 // `onClick` makes the whole card tappable (staff view); omit it for a static card (patient view).
-export default function ScheduledSessionCard({ session, onClick }) {
-  const status = getSessionStatus(session);
+// `restrictJoin` (patient view) only lets the Join button work from 10 minutes before the
+// time slot until 10 minutes after it ends, and only while the subscription is active.
+export default function ScheduledSessionCard({ session, onClick, restrictJoin = false, subscriptionActive = true }) {
+  const now = useNow(restrictJoin);
+  const status = getSessionStatus(session, now);
   const ended = status.key === 'ended';
   const endingSoon = status.key === 'ending-soon';
   const interactive = typeof onClick === 'function';
@@ -94,6 +107,10 @@ export default function ScheduledSessionCard({ session, onClick }) {
           <button disabled className="btn-secondary w-full opacity-60" onClick={(e) => e.stopPropagation()}>
             Session ended
           </button>
+        ) : restrictJoin && !subscriptionActive ? (
+          <LockedJoin label="Subscription expired" />
+        ) : restrictJoin && !getJoinState(session.timeSlot, now, session).open ? (
+          <LockedJoin label={getJoinState(session.timeSlot, now, session).label} />
         ) : (
           <a
             href={session.meetingLink}

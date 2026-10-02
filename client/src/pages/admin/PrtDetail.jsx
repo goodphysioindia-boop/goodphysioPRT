@@ -6,6 +6,7 @@ import api from '../../api/axios';
 import { FullPageSpinner, EmptyState } from '../../components/Ui';
 import Modal from '../../components/Modal';
 import { TextField, SelectField, ToggleField } from '../../components/FormFields';
+import { RatingSummary } from '../../components/RatingCard';
 
 function InfoRow({ label, value }) {
   return (
@@ -42,16 +43,19 @@ export default function PrtDetail() {
   const [mapDoctorId, setMapDoctorId] = useState('');
   const [mapping, setMapping] = useState(false);
   const [totalSessions, setTotalSessions] = useState(null);
+  const [ratings, setRatings] = useState({ byPrt: {}, byPatient: {} });
 
   const load = useCallback(async () => {
     try {
-      const [u, p, d, s] = await Promise.all([
+      const [u, p, d, s, r] = await Promise.all([
         api.get(`/users/${id}`),
         api.get('/patients'),
         api.get('/doctors'),
         api.get('/users/prt-stats').catch(() => ({ data: [] })),
+        api.get('/users/prt-ratings').catch(() => ({ data: { byPrt: {}, byPatient: {} } })),
       ]);
       setPrt(u.data);
+      setRatings(r.data);
       setPatients(p.data.filter((pt) => (pt.addedBy?._id || pt.addedBy) === id));
       setAllDoctors(d.data);
       setDoctors(d.data.filter((doc) => (doc.assignedPRTs || []).some((a) => (a?._id || a) === id)));
@@ -138,6 +142,7 @@ export default function PrtDetail() {
                 {prt.isInactive ? 'Inactive' : 'Active'}
               </span>
             </div>
+            <RatingSummary rating={ratings.byPrt[id]} className="mt-2 !text-sm" />
           </div>
           <button className="btn-secondary" onClick={() => navigate(`/admin/prts/${prt._id}/edit`)}>
             <Pencil className="h-4 w-4" /> Edit
@@ -247,7 +252,10 @@ export default function PrtDetail() {
                     {p.assignedDoctor?.doctorName ? ` · ${p.assignedDoctor.doctorName}` : ''}
                   </p>
                 </div>
-                <span className="whitespace-nowrap text-xs font-medium text-brand-500">View →</span>
+                <span className="flex flex-shrink-0 flex-col items-end gap-1">
+                  <RatingSummary rating={ratings.byPatient[p._id]} />
+                  <span className="whitespace-nowrap text-xs font-medium text-brand-500">View →</span>
+                </span>
               </button>
             ))}
           </div>

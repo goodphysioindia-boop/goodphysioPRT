@@ -4,6 +4,8 @@ import toast from 'react-hot-toast';
 import api from '../api/axios';
 import { useAuth } from '../context/AuthContext';
 import { FullPageSpinner, EmptyState } from '../components/Ui';
+import { SubscriptionBadge, SubscriptionBanner } from '../components/SubscriptionBadge';
+import { getSubscriptionStatus, fmtSubDate } from '../utils/subscription';
 
 export default function PatientMyProfile() {
   const { user } = useAuth();
@@ -34,6 +36,7 @@ export default function PatientMyProfile() {
   }
 
   const { patient } = data;
+  const subStatus = getSubscriptionStatus(patient);
 
   const gridItems = [
     ['Patient ID', patient.patientId],
@@ -49,6 +52,13 @@ export default function PatientMyProfile() {
     ['Registered On', format(new Date(patient.createdAt), 'd MMM yyyy, h:mm a')],
     ['Registered By', patient.addedBy?.name || '-'],
   ];
+  const subItems = subStatus.key === 'none'
+    ? []
+    : [
+        ['Plan', subStatus.planLabel],
+        ['Valid From', fmtSubDate(subStatus.startDate)],
+        ['Valid Till', fmtSubDate(subStatus.endDate)],
+      ];
 
   return (
     <div className="mx-auto max-w-lg space-y-5 pb-6">
@@ -57,6 +67,23 @@ export default function PatientMyProfile() {
         <h1 className="text-xl font-extrabold text-slate-900">{patient.name}</h1>
         <p className="text-xs text-slate-400">These details were entered by your PRT or clinic admin.</p>
       </div>
+
+      <SubscriptionBanner status={subStatus} patientView />
+
+      {subItems.length > 0 && (
+        <div className="card divide-y divide-slate-50 px-4">
+          <div className="flex items-center justify-between py-2.5 text-sm">
+            <span className="text-slate-400">Subscription</span>
+            <SubscriptionBadge status={subStatus} />
+          </div>
+          {subItems.map(([label, value]) => (
+            <div key={label} className="flex items-center justify-between gap-3 py-2.5 text-sm">
+              <span className="text-slate-400">{label}</span>
+              <span className="max-w-[60%] text-right font-medium text-slate-700">{value}</span>
+            </div>
+          ))}
+        </div>
+      )}
 
       <div className="card divide-y divide-slate-50 px-4">
         {gridItems.map(([label, value]) => (

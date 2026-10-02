@@ -1,4 +1,4 @@
-# PRT Health — Patient Management System
+# Good Physio — Patient Management System
 
 A full MERN + Cloudinary + Tailwind CSS **PWA** for managing field PRTs (Physiotherapy Reps), the doctors they visit, patient registration (with consent-form uploads), pre/post session vitals tracking, medicine records, and an admin back-office.
 

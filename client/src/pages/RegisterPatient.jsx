@@ -5,6 +5,9 @@ import { Camera, CheckCircle2, Loader2 } from 'lucide-react';
 import api from '../api/axios';
 import { TextField, SelectField, RadioGroup, CheckboxGroup, TextareaField } from '../components/FormFields';
 import { Spinner } from '../components/Ui';
+import ScheduledSessionPicker from '../components/ScheduledSessionPicker';
+import { todayStr, trialEndFor, fmtSubDate, TRIAL_DAYS } from '../utils/subscription';
+import { format } from 'date-fns';
 
 const COMORBIDITIES = ['Hypertension', 'Cardiac Condition', 'Diabetes', 'Obesity', 'Arthritis'];
 const TIME_SLOTS = ['9:00 AM - 10:00 AM', '10:30 AM - 11:30 AM', '12:00 PM - 1:00 PM', '2:00 PM - 3:00 PM', '4:00 PM - 5:00 PM'];
@@ -23,6 +26,8 @@ export default function RegisterPatient() {
   const [createdSession, setCreatedSession] = useState(null);
   // null = not yet decided, 'skip' = end after this session (no vitals), 'record' = fill in vitals
   const [vitalsChoice, setVitalsChoice] = useState(null);
+  // true while the picked scheduled session supplies the (read-only) meeting link
+  const [linkLocked, setLinkLocked] = useState(false);
 
   const [form, setForm] = useState({
     // Basic Info
@@ -30,10 +35,12 @@ export default function RegisterPatient() {
     // Doctor & Clinical
     assignedDoctor: '', lungCondition: '', secondaryConditions: [], timeSlot: '',
     reasonNotJoiningOnline: '', languageForSession: '', isPatientNewOrOld: 'New',
+    // Subscription: the free trial runs from this date
+    startDate: todayStr(),
     // Consent
     consentFormUrl: '', consentFormPublicId: '',
     // Pre vitals
-    sessionType: '', exerciseName: '', spo2Percent: '', heartRate: '', bpMmhg: '', preRemark: '', meetingLink: '',
+    sessionDate: format(new Date(), "yyyy-MM-dd'T'HH:mm"), sessionType: '', exerciseName: '', spo2Percent: '', heartRate: '', bpMmhg: '', preRemark: '', meetingLink: '', scheduledSession: '',
     // Post vitals
     postHeartRate: '', postBpMmhg: '', respirationRate: '', sixMwtMeters: '', eq5d3lScore: '', remark: '',
   });
@@ -64,6 +71,10 @@ export default function RegisterPatient() {
     if (step === 1) {
       if (!form.assignedDoctor || !form.lungCondition) {
         toast.error('Please select a doctor and primary condition');
+        return false;
+      }
+      if (!form.startDate) {
+        toast.error('Please choose a start date');
         return false;
       }
     }
@@ -110,6 +121,7 @@ export default function RegisterPatient() {
         reasonNotJoiningOnline: form.reasonNotJoiningOnline,
         languageForSession: form.languageForSession,
         isPatientNewOrOld: form.isPatientNewOrOld,
+        startDate: form.startDate,
         consentFormUrl: form.consentFormUrl,
         consentFormPublicId: form.consentFormPublicId,
       });
@@ -129,6 +141,10 @@ export default function RegisterPatient() {
       toast.error('Please select a session type');
       return;
     }
+    if (!form.sessionDate) {
+      toast.error('Please set the session date');
+      return;
+    }
     if (isConsultation && vitalsChoice === null) {
       toast.error('Please confirm whether to record vitals for this consultation');
       return;
@@ -141,12 +157,14 @@ export default function RegisterPatient() {
     try {
       const { data } = await api.post(`/patients/${createdPatient._id}/sessions`, {
         sessionType: form.sessionType,
+        sessionDate: new Date(form.sessionDate).toISOString(),
         exerciseName: form.exerciseName,
         spo2Percent: form.spo2Percent ? Number(form.spo2Percent) : undefined,
         heartRate: form.heartRate ? Number(form.heartRate) : undefined,
         bpMmhg: form.bpMmhg,
         remark: form.preRemark,
         meetingLink: form.meetingLink,
+        scheduledSession: form.scheduledSession || undefined,
       });
       setCreatedSession(data);
       if (skippingVitals) {
@@ -233,6 +251,12 @@ export default function RegisterPatient() {
               onChange={(vals) => setForm((f) => ({ ...f, secondaryConditions: vals }))}
             />
             <SelectField label="Time Slot Allocated" value={form.timeSlot} onChange={set('timeSlot')} options={TIME_SLOTS} />
+            <TextField label="Start Date" required type="date" value={form.startDate} onChange={set('startDate')} />
+            {form.startDate && (
+              <p className="-mt-2 text-xs text-slate-400">
+                A {TRIAL_DAYS}-day free trial starts from this date and runs until {fmtSubDate(trialEndFor(form.startDate))}.
+              </p>
+            )}
             <TextareaField
               label="Why is patient not joining online session?"
               value={form.reasonNotJoiningOnline}
@@ -274,7 +298,26 @@ export default function RegisterPatient() {
             <div className="rounded-xl bg-brand-50 px-3 py-2 text-xs font-semibold text-brand-700">
               Current Session No: 1
             </div>
+            <ScheduledSessionPicker
+              active={step === 3}
+              patientId={createdPatient?._id}
+              value={form.scheduledSession}
+              onPick={(picked) => {
+                const nextType = picked && SESSION_TYPES.includes(picked.sessionType) ? picked.sessionType : form.sessionType;
+                if (nextType !== form.sessionType) setVitalsChoice(null);
+                // Session type is pre-filled (still editable); the link is taken from the session and locked
+                const sessionLink = picked?.meetingLink || '';
+                setForm((f) => ({
+                  ...f,
+                  scheduledSession: picked?._id || '',
+                  sessionType: nextType,
+                  meetingLink: sessionLink || (linkLocked ? '' : f.meetingLink),
+                }));
+                setLinkLocked(!!sessionLink);
+              }}
+            />
             <SelectField label="Session Type" required value={form.sessionType} onChange={handleSessionTypeChange} options={SESSION_TYPES} />
+            <TextField label="Session Date & Time" required type="datetime-local" value={form.sessionDate} onChange={set('sessionDate')} />
 
             {needsVitalsChoice && (
               <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 space-y-2.5">
@@ -304,8 +347,13 @@ export default function RegisterPatient() {
                   value={form.meetingLink}
                   onChange={set('meetingLink')}
                   placeholder="https://meet.google.com/xxx-xxxx-xxx"
+                  disabled={linkLocked}
                 />
-                <p className="-mt-2 text-xs text-slate-400">Optional — shown to the patient as a "Join" button for this session.</p>
+                <p className="-mt-2 text-xs text-slate-400">
+                  {linkLocked
+                    ? 'Using the selected session\'s shared link — it can only be changed by editing the scheduled session.'
+                    : 'Optional — shown to the patient as a "Join" button for this session.'}
+                </p>
               </>
             )}
 

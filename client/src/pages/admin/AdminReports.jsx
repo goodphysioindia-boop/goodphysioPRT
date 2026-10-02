@@ -38,7 +38,7 @@ export default function AdminReports() {
             sessionType: s.sessionType,
             status: s.status,
             remark: [s.preVitals?.remark, s.postVitals?.remark].filter(Boolean).join(' | '),
-            date: s.createdAt,
+            date: s.sessionDate || s.createdAt,
           }))
         );
         setRows(flat.sort((a, b) => new Date(b.date) - new Date(a.date)));

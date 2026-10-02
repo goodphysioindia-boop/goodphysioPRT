@@ -8,6 +8,8 @@ import { useAuth } from '../context/AuthContext';
 import { FullPageSpinner, EmptyState, SearchBar, PageHeader } from '../components/Ui';
 import DoctorPrtPanel from '../components/DoctorPrtPanel';
 import PrtDoctorPanel from '../components/PrtDoctorPanel';
+import { SubscriptionBadge } from '../components/SubscriptionBadge';
+import { getSubscriptionStatus } from '../utils/subscription';
 
 export default function MyPatients() {
   const { isAdmin, user } = useAuth();
@@ -55,7 +57,9 @@ export default function MyPatients() {
         <EmptyState icon={Users} title="No patients yet" subtitle="Register your first patient from the Register a Patient tab." />
       ) : (
         <div className="space-y-2.5">
-          {filtered.map((p) => (
+          {filtered.map((p) => {
+            const sub = getSubscriptionStatus(p);
+            return (
             <Link
               key={p._id}
               to={`/my-patients/${p._id}`}
@@ -67,10 +71,19 @@ export default function MyPatients() {
                 </p>
                 <p className="truncate text-sm font-bold text-slate-900">{p.name}</p>
                 <p className="text-xs text-slate-400">{format(new Date(p.createdAt), "d MMM yyyy 'at' h:mm a")}</p>
+                <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1">
+                  <SubscriptionBadge status={sub} />
+                  {sub.reminder && (
+                    <span className={`text-[11px] font-semibold ${sub.key === 'expiring' ? 'text-amber-600' : 'text-red-500'}`}>
+                      {sub.reminder}
+                    </span>
+                  )}
+                </div>
               </div>
               <ChevronRight className="h-5 w-5 flex-shrink-0 text-slate-300" />
             </Link>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>

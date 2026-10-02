@@ -51,6 +51,9 @@ const visibilityFilter = (user) => {
   return { $or: or };
 };
 
+// Reused by patientController when a patient is attached to a group session
+exports.canViewSession = canView;
+
 // Route guard for create / edit / delete
 exports.requireScheduler = (req, res, next) => {
   if (!canSchedule(req.user)) {

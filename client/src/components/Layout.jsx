@@ -1,6 +1,6 @@
 import React from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, UserPlus, User, ShieldCheck, LogOut, Stethoscope, Users, Video, CalendarDays } from 'lucide-react';
+import { LayoutDashboard, UserPlus, User, ShieldCheck, LogOut, Users, Video, CalendarDays } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 const NAV_ITEMS = [
@@ -35,14 +35,9 @@ export default function Layout() {
     <div className="flex h-screen w-full overflow-hidden bg-[#f4f5fb]">
       {/* Desktop sidebar */}
       <aside className="hidden sm:flex sm:w-64 flex-col border-r border-slate-200 bg-white">
-        <div className="flex items-center gap-2 px-5 py-5 border-b border-slate-100">
-          <div className="grid h-9 w-9 place-items-center rounded-xl bg-brand-600 text-white">
-            <Stethoscope className="h-5 w-5" />
-          </div>
-          <div>
-            <p className="text-sm font-extrabold text-slate-900 leading-tight">PRT Health</p>
-            <p className="text-[11px] text-slate-400 leading-tight">Patient Management</p>
-          </div>
+        <div className="flex items-center gap-3 px-5 py-3 border-b border-slate-100">
+          <img src="/logo.png" alt="Good Physio — Advanced Physiotherapy & Rehabilitation" className="h-16 w-auto flex-shrink-0 object-contain" />
+          <p className="text-xs font-semibold leading-tight text-slate-400">Patient Management</p>
         </div>
         <nav className="flex-1 space-y-1 px-3 py-4">
           {items.map(({ to, label, icon: Icon }) => (
@@ -82,9 +77,7 @@ export default function Layout() {
             sidebar (which normally holds it) is hidden below the sm breakpoint. */}
         <div className="flex items-center justify-between border-b border-slate-100 bg-white px-4 py-3 sm:hidden">
           <div className="flex items-center gap-2">
-            <div className="grid h-8 w-8 place-items-center rounded-lg bg-brand-600 text-white">
-              <Stethoscope className="h-4 w-4" />
-            </div>
+            <img src="/logo-mark.png" alt="Good Physio" className="h-9 w-9 flex-shrink-0 object-contain" />
             <div className="min-w-0">
               <p className="truncate text-sm font-extrabold leading-tight text-slate-900">{user?.name}</p>
               <p className="truncate text-[10px] leading-tight text-slate-400">{ROLE_LABELS[user?.role] || user?.role}</p>

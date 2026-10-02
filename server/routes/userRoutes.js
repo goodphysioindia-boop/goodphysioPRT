@@ -9,11 +9,13 @@ const {
   deleteUser,
   getPrtStats,
   setSessionAccessBulk,
+  getPrtRatings,
 } = require('../controllers/userController');
 
 router.use(protect);
 
 router.get('/prt-stats', authorize('admin', 'prt'), getPrtStats); // admin: all PRTs, PRT: own row only
+router.get('/prt-ratings', authorize('admin'), getPrtRatings); // admin only; must stay above '/:id'
 router.get('/', getAllUsers);
 router.get('/:id', getUserById);
 

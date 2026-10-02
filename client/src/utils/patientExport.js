@@ -2,6 +2,7 @@ import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import ExcelJS from 'exceljs';
 import { format } from 'date-fns';
+import { LOGO_DATA_URL, LOGO_ASPECT } from './logoData';
 
 // ---------------------------------------------------------------------------
 // Shared helpers
@@ -45,24 +46,27 @@ export function exportPatientPdf(patient, sessions = [], medicines = []) {
   const pageWidth = doc.internal.pageSize.getWidth();
   const margin = 40;
 
-  // ---- Header band -------------------------------------------------------
-  doc.setFillColor(BRAND.r, BRAND.g, BRAND.b);
-  doc.rect(0, 0, pageWidth, 86, 'F');
+  // ---- Header: Good Physio logo (shown whole, never cropped) -----------------
+  const logoH = 76;
+  const logoW = logoH * LOGO_ASPECT;
+  doc.addImage(LOGO_DATA_URL, 'PNG', margin, 14, logoW, logoH);
 
-  doc.setTextColor(255, 255, 255);
+  doc.setTextColor(30, 27, 75);
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(18);
-  doc.text('PRT Health', margin, 36);
+  doc.setFontSize(15);
+  doc.text('Patient Clinical Report', margin + logoW + 16, 48);
 
+  doc.setTextColor(100, 116, 139);
   doc.setFont('helvetica', 'normal');
-  doc.setFontSize(10.5);
-  doc.text('Patient Clinical Report', margin, 54);
-
   doc.setFontSize(9);
-  doc.text(`Generated ${format(new Date(), 'd MMM yyyy, h:mm a')}`, pageWidth - margin, 36, { align: 'right' });
-  doc.text(`Patient ID: ${safe(patient.patientId)}`, pageWidth - margin, 50, { align: 'right' });
+  doc.text(`Generated ${format(new Date(), 'd MMM yyyy, h:mm a')}`, pageWidth - margin, 40, { align: 'right' });
+  doc.text(`Patient ID: ${safe(patient.patientId)}`, pageWidth - margin, 54, { align: 'right' });
 
-  let y = 110;
+  doc.setDrawColor(BRAND.r, BRAND.g, BRAND.b);
+  doc.setLineWidth(1.5);
+  doc.line(margin, 98, pageWidth - margin, 98);
+
+  let y = 124;
 
   // ---- Patient name block --------------------------------------------------
   doc.setTextColor(30, 27, 75);
@@ -149,7 +153,7 @@ export function exportPatientPdf(patient, sessions = [], medicines = []) {
         s.postVitals?.respirationRate != null ? `${s.postVitals.respirationRate}` : '-',
         s.postVitals?.sixMwtMeters != null ? `${s.postVitals.sixMwtMeters}m` : '-',
         safe(s.postVitals?.eq5d3lScore),
-        fmtDate(s.createdAt, 'd MMM yyyy'),
+        fmtDate(s.sessionDate || s.createdAt, 'd MMM yyyy'),
       ]),
       columnStyles: {
         0: { halign: 'center', cellWidth: 20 },
@@ -226,7 +230,7 @@ export function exportPatientPdf(patient, sessions = [], medicines = []) {
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(8);
     doc.setTextColor(148, 163, 184);
-    doc.text('PRT Health — Confidential Patient Record', margin, h - 20);
+    doc.text('Good Physio — Confidential Patient Record', margin, h - 20);
     doc.text(`Page ${i} of ${pageCount}`, pageWidth - margin, h - 20, { align: 'right' });
   }
 
@@ -293,7 +297,7 @@ function addTitleBanner(ws, { title, subtitle, cols }) {
 
 export async function exportPatientExcel(patient, sessions = [], medicines = []) {
   const wb = new ExcelJS.Workbook();
-  wb.creator = 'PRT Health';
+  wb.creator = 'Good Physio';
   wb.created = new Date();
 
   // ---- Sheet 1: Patient Info ----------------------------------------------
@@ -331,7 +335,7 @@ export async function exportPatientExcel(patient, sessions = [], medicines = [])
     'Session #', 'Type', 'Exercise', 'Status',
     'SPO2 Pre (%)', 'HR Pre (bpm)', 'BP Pre',
     'HR Post (bpm)', 'BP Post', 'Resp. Post', '6MWT (m)', 'EQ5D3L',
-    'Pre Remark', 'Post Remark', 'Recorded On',
+    'Pre Remark', 'Post Remark', 'Session Date',
   ];
   sessSheet.columns = sessHeaders.map((h) => ({ width: Math.max(12, Math.min(26, h.length + 6)) }));
   addTitleBanner(sessSheet, { title: `${patient.name} — Session Log`, subtitle: `${sessions.length} session${sessions.length === 1 ? '' : 's'} · Generated ${format(new Date(), 'd MMM yyyy, h:mm a')}`, cols: sessHeaders.length });
@@ -356,7 +360,7 @@ export async function exportPatientExcel(patient, sessions = [], medicines = [])
       safe(s.postVitals?.eq5d3lScore),
       safe(s.preVitals?.remark, ''),
       safe(s.postVitals?.remark, ''),
-      fmtDate(s.createdAt),
+      fmtDate(s.sessionDate || s.createdAt),
     ]);
     row.getCell(4).font = { bold: true, color: { argb: s.status === 'complete' ? 'FF059669' : 'FFD97706' } };
     row.alignment = { vertical: 'middle' };

@@ -1,6 +1,7 @@
 const User = require('../models/User');
 const Patient = require('../models/Patient');
 const Session = require('../models/Session');
+const Rating = require('../models/Rating');
 const generateId = require('../utils/generateId');
 
 // GET /api/users  (Admin: "View All PRT Data" / "All PRTs")
@@ -180,5 +181,39 @@ exports.getPrtStats = async (req, res) => {
     res.json(stats);
   } catch (err) {
     res.status(500).json({ message: 'Failed to compute PRT stats', error: err.message });
+  }
+};
+
+// GET /api/users/prt-ratings  (Admin only)
+// Patients rate their PRT. Returns the average star rating per PRT (across every rating
+// their patients have given) and per patient, keyed by id:
+//   { byPrt: { [prtId]: { average, count } }, byPatient: { [patientId]: { average, count } } }
+exports.getPrtRatings = async (req, res) => {
+  try {
+    const perPatient = await Rating.aggregate([
+      { $group: { _id: '$patient', sum: { $sum: '$stars' }, count: { $sum: 1 } } },
+    ]);
+    const patients = await Patient.find({ _id: { $in: perPatient.map((r) => r._id) } }).select('addedBy').lean();
+    const prtOf = new Map(patients.map((p) => [String(p._id), String(p.addedBy)]));
+
+    const byPatient = {};
+    const prtTotals = {};
+    perPatient.forEach((r) => {
+      byPatient[r._id] = { average: r.sum / r.count, count: r.count };
+      const prtId = prtOf.get(String(r._id));
+      if (!prtId) return;
+      prtTotals[prtId] = prtTotals[prtId] || { sum: 0, count: 0 };
+      prtTotals[prtId].sum += r.sum;
+      prtTotals[prtId].count += r.count;
+    });
+
+    const byPrt = {};
+    Object.entries(prtTotals).forEach(([prtId, t]) => {
+      byPrt[prtId] = { average: t.sum / t.count, count: t.count };
+    });
+
+    res.json({ byPrt, byPatient });
+  } catch (err) {
+    res.status(500).json({ message: 'Failed to fetch ratings', error: err.message });
   }
 };

@@ -2,8 +2,10 @@ const Patient = require('../models/Patient');
 const Session = require('../models/Session');
 const PatientMedicine = require('../models/PatientMedicine');
 const User = require('../models/User');
+const Rating = require('../models/Rating');
 const ScheduledSession = require('../models/ScheduledSession');
 const generateId = require('../utils/generateId');
+const { canViewSession } = require('./scheduledSessionController');
 
 // Shared ownership/visibility check, mirrors the rules in getPatientById.
 // Returns an error message string if access should be denied, or null if OK.
@@ -18,6 +20,25 @@ function checkPatientAccess(patient, user) {
     return 'You can only access your own profile';
   }
   return null;
+}
+
+// ---------------- Subscription helpers ----------------
+const TRIAL_DAYS = 7; // start day counts as day 1, so a trial ends on start + 6
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+function isValidDateStr(str) {
+  if (!DATE_RE.test(String(str))) return false;
+  const d = new Date(`${str}T00:00:00Z`);
+  return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === str;
+}
+function addDaysStr(str, days) {
+  const d = new Date(`${str}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+function todayStr() {
+  const n = new Date();
+  return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}-${String(n.getDate()).padStart(2, '0')}`;
 }
 
 // GET /api/patients  ("My Patients" - scoped per role, Admin sees all)
@@ -103,7 +124,12 @@ exports.createPatient = async (req, res) => {
       isPatientNewOrOld,
       consentFormUrl,
       consentFormPublicId,
+      startDate,
     } = req.body;
+
+    if (startDate && !isValidDateStr(startDate)) {
+      return res.status(400).json({ message: 'Invalid start date' });
+    }
 
     if (!name || !age || !gender || !phoneNumber || !assignedDoctor || !lungCondition || !consentFormUrl) {
       return res.status(400).json({ message: 'Missing required patient fields (name, age, gender, phone, doctor, diagnosis, consent form)' });
@@ -118,6 +144,10 @@ exports.createPatient = async (req, res) => {
     }
 
     const patientId = await generateId(Patient, 'patientId', 'PAT', { withYear: true, padding: 4 });
+
+    // The 7-day free trial begins on the chosen start date (today by default)
+    const trialStart = startDate || todayStr();
+    const trial = { plan: 'trial', startDate: trialStart, endDate: addDaysStr(trialStart, TRIAL_DAYS - 1) };
 
     const patient = await Patient.create({
       patientId,
@@ -139,6 +169,8 @@ exports.createPatient = async (req, res) => {
       isPatientNewOrOld: isPatientNewOrOld || 'New',
       consentFormUrl,
       consentFormPublicId,
+      subscription: trial,
+      subscriptionHistory: [{ ...trial, recordedBy: req.user._id }],
       addedBy: req.user._id,
       addedByPrtEmail: req.user.loginEmail,
     });
@@ -215,6 +247,90 @@ exports.updatePatient = async (req, res) => {
   }
 };
 
+// POST /api/patients/:id/subscription  (Activate / extend a subscription)
+exports.setSubscription = async (req, res) => {
+  try {
+    const patient = await Patient.findById(req.params.id);
+    if (!patient) return res.status(404).json({ message: 'Patient not found' });
+
+    const denyReason = checkPatientAccess(patient, req.user);
+    if (denyReason) return res.status(403).json({ message: denyReason });
+
+    const { startDate, endDate, paymentMode } = req.body;
+    if (!isValidDateStr(startDate) || !isValidDateStr(endDate)) {
+      return res.status(400).json({ message: 'A valid start date and end date are required' });
+    }
+    if (endDate < startDate) {
+      return res.status(400).json({ message: 'End date cannot be before the start date' });
+    }
+    if (!['Online', 'Cash'].includes(paymentMode)) {
+      return res.status(400).json({ message: 'Payment mode must be Online or Cash' });
+    }
+
+    const entry = { plan: 'paid', startDate, endDate, paymentMode };
+    patient.subscription = entry;
+    patient.subscriptionHistory.push({ ...entry, recordedBy: req.user._id });
+    await patient.save();
+
+    res.json(patient);
+  } catch (err) {
+    res.status(500).json({ message: 'Failed to update subscription', error: err.message });
+  }
+};
+
+// ---------------- Ratings ----------------
+
+// POST /api/patients/:id/ratings  (Patient only — their own record)
+// One rating per day: rating again on the same day replaces it.
+exports.addRating = async (req, res) => {
+  try {
+    const patient = await Patient.findById(req.params.id).select('_id');
+    if (!patient) return res.status(404).json({ message: 'Patient not found' });
+    if (String(patient._id) !== String(req.user.linkedPatient)) {
+      return res.status(403).json({ message: 'You can only rate your own sessions' });
+    }
+
+    const stars = Number(req.body.stars);
+    const day = isValidDateStr(req.body.day) ? req.body.day : todayStr();
+    if (!Number.isInteger(stars) || stars < 1 || stars > 5) {
+      return res.status(400).json({ message: 'Rating must be between 1 and 5 stars' });
+    }
+
+    const rating = await Rating.findOneAndUpdate(
+      { patient: patient._id, day },
+      { stars },
+      { upsert: true, new: true, setDefaultsOnInsert: true }
+    );
+    res.status(201).json({ stars: rating.stars, day: rating.day });
+  } catch (err) {
+    res.status(500).json({ message: 'Failed to save rating', error: err.message });
+  }
+};
+
+// GET /api/patients/:id/ratings
+//  - Admin:   every rating this patient has given + the average
+//  - Patient: only their own rating for ?day= (so the stars show what they picked)
+// PRTs and doctors never see ratings.
+exports.getRatings = async (req, res) => {
+  try {
+    if (req.user.role === 'patient') {
+      if (String(req.params.id) !== String(req.user.linkedPatient)) {
+        return res.status(403).json({ message: 'You can only access your own profile' });
+      }
+      const day = isValidDateStr(req.query.day) ? req.query.day : todayStr();
+      const today = await Rating.findOne({ patient: req.params.id, day }).select('stars day');
+      return res.json({ today });
+    }
+
+    const ratings = await Rating.find({ patient: req.params.id }).sort({ day: -1 }).select('stars day');
+    const count = ratings.length;
+    const average = count ? ratings.reduce((sum, r) => sum + r.stars, 0) / count : 0;
+    res.json({ ratings, count, average });
+  } catch (err) {
+    res.status(500).json({ message: 'Failed to fetch ratings', error: err.message });
+  }
+};
+
 // DELETE /api/patients/:id
 exports.deletePatient = async (req, res) => {
   try {
@@ -226,6 +342,7 @@ exports.deletePatient = async (req, res) => {
     await Patient.findByIdAndDelete(req.params.id);
     await Session.deleteMany({ patient: req.params.id });
     await PatientMedicine.deleteMany({ patient: req.params.id });
+    await Rating.deleteMany({ patient: req.params.id });
     res.json({ message: 'Patient deleted' });
   } catch (err) {
     res.status(500).json({ message: 'Failed to delete patient', error: err.message });
@@ -240,7 +357,7 @@ exports.createSession = async (req, res) => {
     const patient = await Patient.findById(req.params.id);
     if (!patient) return res.status(404).json({ message: 'Patient not found' });
 
-    const { sessionType, exerciseName, spo2Percent, heartRate, bpMmhg, remark, meetingLink, scheduledSession } = req.body;
+    const { sessionType, exerciseName, spo2Percent, heartRate, bpMmhg, remark, meetingLink, scheduledSession, sessionDate } = req.body;
     if (!sessionType) {
       return res.status(400).json({ message: 'sessionType is required' });
     }
@@ -254,15 +371,34 @@ exports.createSession = async (req, res) => {
       return res.status(400).json({ message: 'If recording vitals, spo2Percent, heartRate and bpMmhg are all required' });
     }
 
-    // Optional link to a scheduled session — the patient must be part of it.
+    // When the session took place — optional, defaults to now
+    let when = new Date();
+    if (sessionDate) {
+      when = new Date(sessionDate);
+      if (Number.isNaN(when.getTime())) return res.status(400).json({ message: 'Invalid session date' });
+    }
+
+    // Optional link to a scheduled session. The patient is either already part
+    // of it, or (group sessions only) is being added to it right now — which is
+    // what happens when a freshly registered patient is put into a running batch.
+    // Whoever does that must be able to see the session and own the patient.
     let scheduled = null;
+    let joiningNow = false;
     if (scheduledSession) {
       if (!/^[a-f\d]{24}$/i.test(String(scheduledSession))) {
         return res.status(400).json({ message: 'Invalid scheduled session' });
       }
       scheduled = await ScheduledSession.findById(scheduledSession);
-      if (!scheduled || !scheduled.patients.map(String).includes(String(patient._id))) {
-        return res.status(400).json({ message: 'This patient is not part of the selected scheduled session' });
+      if (!scheduled) return res.status(400).json({ message: 'Selected scheduled session no longer exists' });
+      const isMember = scheduled.patients.map(String).includes(String(patient._id));
+      if (!isMember) {
+        if (scheduled.mode !== 'group') {
+          return res.status(400).json({ message: 'This patient is not part of the selected scheduled session' });
+        }
+        if (!canViewSession(scheduled, req.user) || checkPatientAccess(patient, req.user)) {
+          return res.status(403).json({ message: 'You cannot add this patient to the selected session' });
+        }
+        joiningNow = true;
       }
     }
 
@@ -275,12 +411,17 @@ exports.createSession = async (req, res) => {
       sessionNumber: existingCount + 1,
       sessionType,
       exerciseName,
-      meetingLink: meetingLink || scheduled?.meetingLink || undefined,
+      sessionDate: when,
+      meetingLink: scheduled?.meetingLink || meetingLink || undefined, // a scheduled session's shared link always wins
       scheduledSession: scheduled ? scheduled._id : undefined,
       preVitals: { spo2Percent, heartRate, bpMmhg, remark },
       status: 'pre-only',
       recordedBy: req.user._id,
     });
+
+    if (joiningNow) {
+      await ScheduledSession.updateOne({ _id: scheduled._id }, { $addToSet: { patients: patient._id } });
+    }
 
     res.status(201).json(session);
   } catch (err) {

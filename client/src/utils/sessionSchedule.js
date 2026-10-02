@@ -74,3 +74,40 @@ export function timesFromSlot(slot) {
   if (parts.length !== 2) return { from: '', to: '' };
   return { from: to24h(parts[0]), to: to24h(parts[1]) };
 }
+
+// ---- Join window (patients) ----
+// The Join button is only usable from JOIN_OPENS_BEFORE_MIN minutes before the
+// time slot starts until JOIN_CLOSES_AFTER_MIN minutes after it ends, every day
+// of the session's date range. Outside that it is shown disabled with a reason.
+export const JOIN_OPENS_BEFORE_MIN = 10;
+export const JOIN_CLOSES_AFTER_MIN = 10;
+
+const slotMinutes = (hhmm) => {
+  const [h, m] = hhmm.split(':').map(Number);
+  return h * 60 + m;
+};
+const minutesTo12h = (mins) => to12h(`${String(Math.floor(mins / 60)).padStart(2, '0')}:${String(mins % 60).padStart(2, '0')}`);
+
+// slot: "10:30 AM - 11:30 AM". range (optional): { startDate, endDate } as YYYY-MM-DD.
+// Returns { open: true } or { open: false, label }. A missing / unreadable slot never blocks joining.
+export function getJoinState(slot, now = new Date(), range = {}) {
+  const { from, to } = timesFromSlot(slot);
+  if (!from || !to) return { open: true };
+  const start = slotMinutes(from);
+  const end = slotMinutes(to);
+  if (end <= start) return { open: true };
+
+  const opensAt = start - JOIN_OPENS_BEFORE_MIN;
+  const closesAt = end + JOIN_CLOSES_AFTER_MIN;
+  const nowMin = now.getHours() * 60 + now.getMinutes() + now.getSeconds() / 60;
+  const today = format(now, 'yyyy-MM-dd');
+
+  if (range.startDate && today < range.startDate) {
+    return { open: false, label: `Join opens ${fmtDate(range.startDate)} at ${minutesTo12h(opensAt)}` };
+  }
+  if (range.endDate && today > range.endDate) return { open: false, label: 'Session ended' };
+  if (nowMin >= opensAt && nowMin <= closesAt) return { open: true };
+  if (nowMin < opensAt) return { open: false, label: `Join opens today at ${minutesTo12h(opensAt)}` };
+  if (range.endDate && today >= range.endDate) return { open: false, label: 'Session over for today' };
+  return { open: false, label: `Join opens tomorrow at ${minutesTo12h(opensAt)}` };
+}

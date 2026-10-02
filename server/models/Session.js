@@ -12,6 +12,10 @@ const sessionSchema = new mongoose.Schema(
     },
     exerciseName: { type: String, trim: true },
 
+    // When the session actually took place (set by the PRT; defaults to the time it was
+    // entered). Older records have none and fall back to createdAt wherever it is shown.
+    sessionDate: { type: Date, default: Date.now },
+
     // Optional: the scheduled (admin-created) session this record belongs to
     scheduledSession: { type: mongoose.Schema.Types.ObjectId, ref: 'ScheduledSession' },
 

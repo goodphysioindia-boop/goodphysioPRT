@@ -7,13 +7,13 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.svg', 'icons/*.png'],
+      includeAssets: ['favicon.png', 'logo.png', 'logo-mark.png', 'icons/*.png'],
       manifest: {
-        name: 'PRT Patient Management System',
-        short_name: 'PRT Health',
+        name: 'Good Physio — Patient Management System',
+        short_name: 'Good Physio',
         description: 'Field PRT patient registration, session vitals & doctor management PWA',
         theme_color: '#4f46e5',
-        background_color: '#f4f5fb',
+        background_color: '#ffffff',
         display: 'standalone',
         orientation: 'portrait',
         start_url: '/',

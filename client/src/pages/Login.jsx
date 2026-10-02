@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate, Navigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { Stethoscope, Eye, EyeOff } from 'lucide-react';
+import { Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { roleHomePath } from '../utils/roleHome';
 
@@ -33,11 +33,10 @@ export default function Login() {
     <div className="flex min-h-screen items-center justify-center bg-gradient-to-b from-brand-50 to-[#f4f5fb] px-4">
       <div className="w-full max-w-sm">
         <div className="mb-8 flex flex-col items-center text-center">
-          <div className="mb-3 grid h-14 w-14 place-items-center rounded-2xl bg-brand-600 text-white shadow-pop">
-            <Stethoscope className="h-7 w-7" />
-          </div>
-          <h1 className="text-xl font-extrabold text-slate-900">PRT Health</h1>
-          <p className="text-sm text-slate-500">Patient Management System</p>
+          <h1>
+            <img src="/logo.png" alt="Good Physio — Advanced Physiotherapy & Rehabilitation" className="mx-auto h-40 w-auto max-w-full object-contain" />
+          </h1>
+          <p className="mt-1 text-sm text-slate-500">Patient Management System</p>
         </div>
 
         <form onSubmit={handleSubmit} className="card space-y-4 p-6">
