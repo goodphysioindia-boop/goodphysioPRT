@@ -12,6 +12,7 @@ import MyPatients from './pages/MyPatients';
 import PatientDetail from './pages/PatientDetail';
 import PatientMyProfile from './pages/PatientMyProfile';
 import PatientSessions from './pages/PatientSessions';
+import PatientVideos from './pages/PatientVideos';
 import Me from './pages/Me';
 import Sessions from './pages/Sessions';
 import SessionDetail from './pages/SessionDetail';
@@ -25,6 +26,7 @@ import EditPrt from './pages/admin/EditPrt';
 import EditPatient from './pages/admin/EditPatient';
 import AdminMedicines from './pages/admin/AdminMedicines';
 import AdminReports from './pages/admin/AdminReports';
+import AdminVideos from './pages/admin/AdminVideos';
 
 // Redirects "/" (and unknown paths) to whatever landing page fits the
 // logged-in user's role — instead of assuming everyone lands on /dashboard.
@@ -128,6 +130,25 @@ export default function App() {
           }
         />
 
+        <Route
+          path="/my-videos"
+          element={
+            <ProtectedRoute roles={['patient']}>
+              <PatientVideos />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Exercise videos — PRTs upload videos and give them to their own patients */}
+        <Route
+          path="/videos"
+          element={
+            <ProtectedRoute roles={['admin', 'prt']}>
+              <AdminVideos />
+            </ProtectedRoute>
+          }
+        />
+
         {/* Available to every role */}
         <Route path="/me" element={<Me />} />
 
@@ -185,6 +206,14 @@ export default function App() {
           element={
             <ProtectedRoute adminOnly>
               <AdminMedicines />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/videos"
+          element={
+            <ProtectedRoute adminOnly>
+              <AdminVideos />
             </ProtectedRoute>
           }
         />

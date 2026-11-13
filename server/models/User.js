@@ -25,6 +25,9 @@ const userSchema = new mongoose.Schema(
     team: { type: String, trim: true },
     isInactive: { type: Boolean, default: false },
 
+    // Profile picture (image URL). Every role can set / remove their own.
+    profilePicture: { type: String, default: '' },
+
     // Admin-controlled: lets a PRT / doctor schedule sessions (admins always can)
     canCreateSessions: { type: Boolean, default: false },
   },

@@ -4,6 +4,7 @@ import toast from 'react-hot-toast';
 import api from '../api/axios';
 import { useAuth } from '../context/AuthContext';
 import { FullPageSpinner, EmptyState } from '../components/Ui';
+import ProfilePictureUploader from '../components/ProfilePictureUploader';
 import { SubscriptionBadge, SubscriptionBanner } from '../components/SubscriptionBadge';
 import { getSubscriptionStatus, fmtSubDate } from '../utils/subscription';
 
@@ -62,10 +63,13 @@ export default function PatientMyProfile() {
 
   return (
     <div className="mx-auto max-w-lg space-y-5 pb-6">
-      <div>
-        <p className="text-[11px] font-bold uppercase tracking-wide text-brand-600">My Profile</p>
-        <h1 className="text-xl font-extrabold text-slate-900">{patient.name}</h1>
-        <p className="text-xs text-slate-400">These details were entered by your PRT or clinic admin.</p>
+      <div className="flex items-center gap-4">
+        <ProfilePictureUploader name={patient.name} size="h-20 w-20" textSize="text-2xl" />
+        <div className="min-w-0">
+          <p className="text-[11px] font-bold uppercase tracking-wide text-brand-600">My Profile</p>
+          <h1 className="text-xl font-extrabold text-slate-900">{patient.name}</h1>
+          <p className="text-xs text-slate-400">These details were entered by your PRT or clinic admin.</p>
+        </div>
       </div>
 
       <SubscriptionBanner status={subStatus} patientView />

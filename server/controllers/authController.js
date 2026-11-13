@@ -62,3 +62,22 @@ exports.changePassword = async (req, res) => {
     res.status(500).json({ message: 'Could not change password', error: err.message });
   }
 };
+
+// PUT /api/auth/profile-picture   body: { url }  (empty url removes the picture)
+// Any logged-in user can change their OWN picture; the image itself is uploaded first
+// through POST /api/uploads?purpose=profile-pictures.
+exports.updateProfilePicture = async (req, res) => {
+  try {
+    const url = typeof req.body.url === 'string' ? req.body.url.trim() : '';
+    if (url && !/^https:\/\//i.test(url)) {
+      return res.status(400).json({ message: 'Invalid image address' });
+    }
+    const user = await User.findById(req.user._id);
+    if (!user) return res.status(404).json({ message: 'User not found' });
+    user.profilePicture = url;
+    await user.save();
+    res.json({ user: sanitize(user) });
+  } catch (err) {
+    res.status(500).json({ message: 'Could not update profile picture', error: err.message });
+  }
+};

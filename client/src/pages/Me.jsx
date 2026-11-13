@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { LogOut, KeyRound, Mail, Phone, MapPin, Building2 } from 'lucide-react';
@@ -6,6 +6,8 @@ import api from '../api/axios';
 import { useAuth } from '../context/AuthContext';
 import Modal from '../components/Modal';
 import { TextField } from '../components/FormFields';
+import ProfilePictureUploader from '../components/ProfilePictureUploader';
+import { RatingSummary, Stars } from '../components/RatingCard';
 
 export default function Me() {
   const { user, logout } = useAuth();
@@ -13,6 +15,12 @@ export default function Me() {
   const [pwModal, setPwModal] = useState(false);
   const [form, setForm] = useState({ currentPassword: '', newPassword: '' });
   const [saving, setSaving] = useState(false);
+  const [myRating, setMyRating] = useState(null); // { average, count } — PRT only
+
+  useEffect(() => {
+    if (user?.role !== 'prt') return;
+    api.get('/users/my-rating').then(({ data }) => setMyRating(data)).catch(() => {});
+  }, [user?.role]);
 
   const handleLogout = () => {
     logout();
@@ -44,15 +52,19 @@ export default function Me() {
   return (
     <div className="mx-auto max-w-lg space-y-5">
       <div className="card flex flex-col items-center gap-3 p-8 text-center">
-        <div className="grid h-16 w-16 place-items-center rounded-full bg-brand-100 text-xl font-bold text-brand-700">
-          {user?.name?.slice(0, 1)?.toUpperCase()}
-        </div>
+        <ProfilePictureUploader name={user?.name} />
         <div>
           <p className="text-lg font-bold text-slate-900">{user?.name}</p>
           <p className="text-xs font-semibold uppercase tracking-wide text-brand-500">
             {user?.role === 'admin' ? 'Administrator' : 'PRT / Field Staff'} {user?.prtId ? `· ${user.prtId}` : ''}
           </p>
         </div>
+        {user?.role === 'prt' && myRating && (
+          <div className="flex flex-col items-center gap-1">
+            {myRating.count > 0 && <Stars value={myRating.average} size="h-5 w-5" />}
+            <RatingSummary rating={myRating} className="!text-sm" />
+          </div>
+        )}
       </div>
 
       <div className="card divide-y divide-slate-50 px-4">

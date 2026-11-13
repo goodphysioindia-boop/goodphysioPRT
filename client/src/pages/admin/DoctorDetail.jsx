@@ -1,11 +1,14 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { ArrowLeft, Phone, Mail, MapPin, Stethoscope, Users, UserCog, Link2 } from 'lucide-react';
+import { ArrowLeft, Phone, Mail, MapPin, Stethoscope, Users, UserCog, Link2, Pencil } from 'lucide-react';
 import api from '../../api/axios';
 import { FullPageSpinner, EmptyState } from '../../components/Ui';
 import Modal from '../../components/Modal';
 import { TextField, SelectField, ToggleField } from '../../components/FormFields';
+
+const SPECIALTIES = ['General Physician', 'Cardiologist', 'Pulmonologist', 'Orthopedic', 'Neurologist', 'Physiotherapist', 'Other'];
+const ZONES = ['East', 'West', 'North', 'South', 'Central'];
 
 function InfoRow({ label, value }) {
   return (
@@ -42,6 +45,9 @@ export default function DoctorDetail() {
   const [mapping, setMapping] = useState(false);
   const [patients, setPatients] = useState([]);
   const [login, setLogin] = useState(null); // doctor's portal login (User), if any
+  const [editOpen, setEditOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [editForm, setEditForm] = useState({ doctorName: '', phoneNumber: '', email: '', clinicLocation: '', specialty: '', zone: '' });
 
   const load = useCallback(async () => {
     try {
@@ -82,6 +88,36 @@ export default function DoctorDetail() {
     } catch (err) {
       setLogin((l) => ({ ...l, canCreateSessions: !value }));
       toast.error(err.response?.data?.message || 'Failed to update access');
+    }
+  };
+
+  const openEdit = () => {
+    setEditForm({
+      doctorName: doctor.doctorName || '',
+      phoneNumber: doctor.phoneNumber || '',
+      email: doctor.email || '',
+      clinicLocation: doctor.clinicLocation || '',
+      specialty: doctor.specialty || '',
+      zone: doctor.zone || '',
+    });
+    setEditOpen(true);
+  };
+
+  const submitEdit = async () => {
+    const { doctorName, phoneNumber, clinicLocation, specialty, zone } = editForm;
+    if (!doctorName || !phoneNumber || !clinicLocation || !specialty || !zone) {
+      return toast.error('Please fill all required fields');
+    }
+    setSaving(true);
+    try {
+      await api.put(`/doctors/${id}`, editForm);
+      toast.success('Doctor updated');
+      setEditOpen(false);
+      await load();
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to update doctor');
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -146,6 +182,9 @@ export default function DoctorDetail() {
               </span>
             </div>
           </div>
+          <button className="btn-secondary px-3 py-1.5" onClick={openEdit}>
+            <Pencil className="h-4 w-4" /> Edit
+          </button>
         </div>
       </div>
 
@@ -257,6 +296,26 @@ export default function DoctorDetail() {
           </div>
         )}
       </div>
+
+      {/* Edit Doctor Modal */}
+      <Modal
+        open={editOpen}
+        onClose={() => setEditOpen(false)}
+        title="Edit Doctor"
+        footer={
+          <>
+            <button className="btn-secondary flex-1" onClick={() => setEditOpen(false)}>Cancel</button>
+            <button className="btn-primary flex-1" disabled={saving} onClick={submitEdit}>{saving ? 'Saving…' : 'Save Changes'}</button>
+          </>
+        }
+      >
+        <TextField label="Doctor Name" required value={editForm.doctorName} onChange={(e) => setEditForm((f) => ({ ...f, doctorName: e.target.value }))} />
+        <TextField label="Doctor Mobile" required value={editForm.phoneNumber} onChange={(e) => setEditForm((f) => ({ ...f, phoneNumber: e.target.value }))} />
+        <TextField label="Doctor Email" type="email" value={editForm.email} onChange={(e) => setEditForm((f) => ({ ...f, email: e.target.value }))} />
+        <TextField label="Clinic / Hospital Location" required value={editForm.clinicLocation} onChange={(e) => setEditForm((f) => ({ ...f, clinicLocation: e.target.value }))} />
+        <SelectField label="Speciality" required options={SPECIALTIES} value={editForm.specialty} onChange={(e) => setEditForm((f) => ({ ...f, specialty: e.target.value }))} />
+        <SelectField label="Zone / Region" required options={ZONES} value={editForm.zone} onChange={(e) => setEditForm((f) => ({ ...f, zone: e.target.value }))} />
+      </Modal>
 
       {/* Map PRT Modal — doctor is fixed (this page), only the PRT is chosen */}
       <Modal

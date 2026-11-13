@@ -8,6 +8,7 @@ import { useAuth } from '../context/AuthContext';
 import { FullPageSpinner, EmptyState, SearchBar, PageHeader } from '../components/Ui';
 import DoctorPrtPanel from '../components/DoctorPrtPanel';
 import PrtDoctorPanel from '../components/PrtDoctorPanel';
+import { RatingSummary } from '../components/RatingCard';
 import { SubscriptionBadge } from '../components/SubscriptionBadge';
 import { getSubscriptionStatus } from '../utils/subscription';
 
@@ -17,6 +18,14 @@ export default function MyPatients() {
   const [patients, setPatients] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [patientRatings, setPatientRatings] = useState({}); // patient id -> { average, count }
+
+  useEffect(() => {
+    // Admin sees every patient's rating; a PRT sees ratings on their own patients only.
+    const url = user?.role === 'admin' ? '/users/prt-ratings' : user?.role === 'prt' ? '/users/my-rating' : null;
+    if (!url) return;
+    api.get(url).then(({ data }) => setPatientRatings(data.byPatient || {})).catch(() => {});
+  }, [user?.role]);
 
   useEffect(() => {
     api
@@ -79,6 +88,11 @@ export default function MyPatients() {
                     </span>
                   )}
                 </div>
+                {(user?.role === 'admin' || user?.role === 'prt') && (
+                  <div className="mt-1.5">
+                    <RatingSummary rating={patientRatings[p._id]} />
+                  </div>
+                )}
               </div>
               <ChevronRight className="h-5 w-5 flex-shrink-0 text-slate-300" />
             </Link>

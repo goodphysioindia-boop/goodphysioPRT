@@ -12,6 +12,7 @@ const medicineRoutes = require('./routes/medicineRoutes');
 const uploadRoutes = require('./routes/uploadRoutes');
 const dashboardRoutes = require('./routes/dashboardRoutes');
 const scheduledSessionRoutes = require('./routes/scheduledSessionRoutes');
+const videoRoutes = require('./routes/videoRoutes');
 
 const app = express();
 
@@ -39,6 +40,7 @@ app.use('/api/medicines', medicineRoutes);
 app.use('/api/uploads', uploadRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/scheduled-sessions', scheduledSessionRoutes);
+app.use('/api/videos', videoRoutes);
 
 // 404 handler
 app.use('/api', (req, res) => {

@@ -1,14 +1,18 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, UserPlus, User, ShieldCheck, LogOut, Users, Video, CalendarDays } from 'lucide-react';
+import { LayoutDashboard, UserPlus, User, ShieldCheck, LogOut, Users, Video, CalendarDays, PlayCircle, Film } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import api from '../api/axios';
+import Avatar from './Avatar';
 
 const NAV_ITEMS = [
   { to: '/dashboard', label: 'My Dashboard', mobileLabel: 'Dashboard', icon: LayoutDashboard, roles: ['admin', 'prt'] },
   { to: '/register-patient', label: 'Register a Patient', mobileLabel: 'Register', icon: UserPlus, roles: ['admin', 'prt'] },
   { to: '/my-patients', label: 'My Patients', mobileLabel: 'Patients', icon: Users, roles: ['admin', 'prt', 'doctor'] },
   { to: '/sessions', label: 'Sessions', mobileLabel: 'Sessions', icon: CalendarDays, roles: ['admin', 'prt', 'doctor'] },
+  { to: '/videos', label: 'Exercise Videos', mobileLabel: 'Videos', icon: Film, roles: ['prt'] },
   { to: '/my-sessions', label: 'Session', mobileLabel: 'Session', icon: Video, roles: ['patient'] },
+  { to: '/my-videos', label: 'Videos', mobileLabel: 'Videos', icon: PlayCircle, roles: ['patient'], needsVideos: true },
   { to: '/my-profile', label: 'Profile', mobileLabel: 'Profile', icon: User, roles: ['patient'] },
   { to: '/me', label: 'Me', mobileLabel: 'Me', icon: User, roles: ['admin', 'prt', 'doctor'] },
   { to: '/admin', label: 'Admin Portal', mobileLabel: 'Admin', icon: ShieldCheck, roles: ['admin'] },
@@ -24,7 +28,13 @@ const ROLE_LABELS = {
 export default function Layout() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
-  const items = NAV_ITEMS.filter((i) => i.roles.includes(user?.role));
+  // Patients only get the Videos tab once an admin has switched video access on for them
+  const [hasVideos, setHasVideos] = useState(false);
+  useEffect(() => {
+    if (user?.role !== 'patient') return;
+    api.get('/videos/my').then(({ data }) => setHasVideos(!!data.enabled)).catch(() => {});
+  }, [user?.role]);
+  const items = NAV_ITEMS.filter((i) => i.roles.includes(user?.role) && (!i.needsVideos || hasVideos));
 
   const handleLogout = () => {
     logout();
@@ -57,9 +67,7 @@ export default function Layout() {
         </nav>
         <div className="border-t border-slate-100 p-3">
           <div className="flex items-center gap-2 rounded-xl px-2 py-2">
-            <div className="grid h-8 w-8 place-items-center rounded-full bg-brand-100 text-xs font-bold text-brand-700">
-              {user?.name?.slice(0, 1)?.toUpperCase()}
-            </div>
+            <Avatar src={user?.profilePicture} name={user?.name} className="h-8 w-8 text-xs" />
             <div className="min-w-0 flex-1">
               <p className="truncate text-sm font-semibold text-slate-800">{user?.name}</p>
               <p className="truncate text-xs text-slate-400">{ROLE_LABELS[user?.role] || user?.role}</p>
@@ -78,6 +86,7 @@ export default function Layout() {
         <div className="flex items-center justify-between border-b border-slate-100 bg-white px-4 py-3 sm:hidden">
           <div className="flex items-center gap-2">
             <img src="/logo-mark.png" alt="Good Physio" className="h-9 w-9 flex-shrink-0 object-contain" />
+            <Avatar src={user?.profilePicture} name={user?.name} className="h-8 w-8 text-xs" />
             <div className="min-w-0">
               <p className="truncate text-sm font-extrabold leading-tight text-slate-900">{user?.name}</p>
               <p className="truncate text-[10px] leading-tight text-slate-400">{ROLE_LABELS[user?.role] || user?.role}</p>

@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { ArrowLeft, Phone, KeyRound, MapPin, Users, UserCog } from 'lucide-react';
+import { ArrowLeft, Phone, KeyRound, MapPin, Users, UserCog, Pencil } from 'lucide-react';
 import api from '../../api/axios';
 import { FullPageSpinner, EmptyState, SearchBar, PageHeader } from '../../components/Ui';
 import Modal from '../../components/Modal';
@@ -20,6 +20,8 @@ export default function AdminDoctors() {
   const [search, setSearch] = useState('');
   const [saving, setSaving] = useState(false);
   const [loginTarget, setLoginTarget] = useState(null); // doctor object
+  const [editTarget, setEditTarget] = useState(null); // doctor being edited
+  const [editForm, setEditForm] = useState({ doctorName: '', phoneNumber: '', email: '', clinicLocation: '', specialty: '', zone: '' });
 
   const addOpen = params.get('new') === '1';
   const mapOpen = params.get('map') === '1';
@@ -93,6 +95,37 @@ export default function AdminDoctors() {
 
   const filtered = doctors.filter((d) => !search || d.doctorName.toLowerCase().includes(search.toLowerCase()) || d.zone.toLowerCase().includes(search.toLowerCase()));
 
+  const openEdit = (d) => {
+    setEditForm({
+      doctorName: d.doctorName || '',
+      phoneNumber: d.phoneNumber || '',
+      email: d.email || '',
+      clinicLocation: d.clinicLocation || '',
+      specialty: d.specialty || '',
+      zone: d.zone || '',
+    });
+    setEditTarget(d);
+  };
+
+  const submitEdit = async (e) => {
+    e.preventDefault();
+    const { doctorName, phoneNumber, clinicLocation, specialty, zone } = editForm;
+    if (!doctorName || !phoneNumber || !clinicLocation || !specialty || !zone) {
+      return toast.error('Please fill all required fields');
+    }
+    setSaving(true);
+    try {
+      await api.put(`/doctors/${editTarget._id}`, editForm);
+      toast.success('Doctor updated');
+      setEditTarget(null);
+      load();
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to update doctor');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const submitLogin = async (e) => {
     e.preventDefault();
     if (!loginForm.loginEmail || !loginForm.password) return toast.error('Email and password are required');
@@ -153,17 +186,29 @@ export default function AdminDoctors() {
                       <span className="badge bg-brand-50 text-brand-700">{d.zone}</span>
                     </div>
                   </div>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setLoginForm({ loginEmail: d.email || '', password: '' });
-                      setLoginTarget(d);
-                    }}
-                    className="rounded-full p-1.5 text-slate-400 hover:bg-slate-100 hover:text-brand-600"
-                    title="Create doctor portal login"
-                  >
-                    <KeyRound className="h-4 w-4" />
-                  </button>
+                  <div className="flex flex-shrink-0 items-center">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        openEdit(d);
+                      }}
+                      className="rounded-full p-1.5 text-slate-400 hover:bg-slate-100 hover:text-brand-600"
+                      title="Edit doctor"
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setLoginForm({ loginEmail: d.email || '', password: '' });
+                        setLoginTarget(d);
+                      }}
+                      className="rounded-full p-1.5 text-slate-400 hover:bg-slate-100 hover:text-brand-600"
+                      title="Create doctor portal login"
+                    >
+                      <KeyRound className="h-4 w-4" />
+                    </button>
+                  </div>
                 </div>
 
                 <div className="mt-3 grid grid-cols-2 gap-2 border-t border-slate-100 pt-3">
@@ -240,6 +285,26 @@ export default function AdminDoctors() {
           value={mapForm.doctorId}
           onChange={(e) => setMapForm((f) => ({ ...f, doctorId: e.target.value }))}
         />
+      </Modal>
+
+      {/* Edit Doctor Modal */}
+      <Modal
+        open={!!editTarget}
+        onClose={() => setEditTarget(null)}
+        title="Edit Doctor"
+        footer={
+          <>
+            <button className="btn-secondary flex-1" onClick={() => setEditTarget(null)}>Cancel</button>
+            <button className="btn-primary flex-1" disabled={saving} onClick={submitEdit}>{saving ? 'Saving…' : 'Save Changes'}</button>
+          </>
+        }
+      >
+        <TextField label="Doctor Name" required value={editForm.doctorName} onChange={(e) => setEditForm((f) => ({ ...f, doctorName: e.target.value }))} />
+        <TextField label="Doctor Mobile" required value={editForm.phoneNumber} onChange={(e) => setEditForm((f) => ({ ...f, phoneNumber: e.target.value }))} />
+        <TextField label="Doctor Email" type="email" value={editForm.email} onChange={(e) => setEditForm((f) => ({ ...f, email: e.target.value }))} />
+        <TextField label="Clinic / Hospital Location" required value={editForm.clinicLocation} onChange={(e) => setEditForm((f) => ({ ...f, clinicLocation: e.target.value }))} />
+        <SelectField label="Speciality" required options={SPECIALTIES} value={editForm.specialty} onChange={(e) => setEditForm((f) => ({ ...f, specialty: e.target.value }))} />
+        <SelectField label="Zone / Region" required options={ZONES} value={editForm.zone} onChange={(e) => setEditForm((f) => ({ ...f, zone: e.target.value }))} />
       </Modal>
 
       {/* Create Doctor Login Modal */}

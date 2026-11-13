@@ -217,3 +217,27 @@ exports.getPrtRatings = async (req, res) => {
     res.status(500).json({ message: 'Failed to fetch ratings', error: err.message });
   }
 };
+
+// GET /api/users/my-rating  (PRT only)
+// The logged-in PRT's own ratings from their patients:
+//   { average, count, byPatient: { [patientId]: { average, count } } }
+exports.getMyRating = async (req, res) => {
+  try {
+    const patientIds = await Patient.find({ addedBy: req.user._id }).distinct('_id');
+    const perPatient = await Rating.aggregate([
+      { $match: { patient: { $in: patientIds } } },
+      { $group: { _id: '$patient', sum: { $sum: '$stars' }, count: { $sum: 1 } } },
+    ]);
+    const byPatient = {};
+    let sum = 0;
+    let count = 0;
+    perPatient.forEach((r) => {
+      byPatient[r._id] = { average: r.sum / r.count, count: r.count };
+      sum += r.sum;
+      count += r.count;
+    });
+    res.json({ average: count ? sum / count : 0, count, byPatient });
+  } catch (err) {
+    res.status(500).json({ message: 'Failed to fetch your rating', error: err.message });
+  }
+};

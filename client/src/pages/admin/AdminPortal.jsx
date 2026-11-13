@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { UserPlus, Users, Grid3x3, ClipboardList, Activity, FileText, Pill, ListPlus, KeyRound, Settings2, CalendarPlus, CalendarDays, ShieldCheck } from 'lucide-react';
+import { UserPlus, Users, Grid3x3, ClipboardList, Activity, FileText, Pill, ListPlus, KeyRound, Settings2, CalendarPlus, CalendarDays, ShieldCheck, Film, Upload, PlayCircle } from 'lucide-react';
 
 const SECTIONS = [
   {
@@ -25,6 +25,14 @@ const SECTIONS = [
       { label: 'Add Session', icon: CalendarPlus, to: '/sessions?new=1' },
       { label: 'View Scheduled Sessions', icon: CalendarDays, to: '/sessions' },
       { label: 'Manage Session Access', icon: ShieldCheck, to: '/sessions?access=1' },
+    ],
+  },
+  {
+    title: 'Exercise Videos',
+    buttons: [
+      { label: 'Upload New Video', icon: Upload, to: '/admin/videos?new=1' },
+      { label: 'Video Library', icon: Film, to: '/admin/videos' },
+      { label: 'Give Patients Video Access', icon: PlayCircle, to: '/admin/videos?tab=access' },
     ],
   },
   {
