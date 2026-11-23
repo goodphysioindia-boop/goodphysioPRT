@@ -1,0 +1,257 @@
+const User = require('../models/User');
+const Patient = require('../models/Patient');
+const Session = require('../models/Session');
+const Rating = require('../models/Rating');
+const generateId = require('../utils/generateId');
+
+// GET /api/users  (Admin: "View All PRT Data" / "All PRTs")
+exports.getAllUsers = async (req, res) => {
+  try {
+    const { search, zone, role } = req.query;
+    const filter = {};
+    if (role) filter.role = role;
+    if (zone) filter.zone = zone;
+    if (search) {
+      filter.$or = [
+        { name: { $regex: search, $options: 'i' } },
+        { loginEmail: { $regex: search, $options: 'i' } },
+      ];
+    }
+    const users = await User.find(filter).sort({ createdAt: -1 });
+    res.json(users);
+  } catch (err) {
+    res.status(500).json({ message: 'Failed to fetch users', error: err.message });
+  }
+};
+
+// GET /api/users/:id
+exports.getUserById = async (req, res) => {
+  try {
+    const user = await User.findById(req.params.id);
+    if (!user) return res.status(404).json({ message: 'User not found' });
+    res.json(user);
+  } catch (err) {
+    res.status(500).json({ message: 'Failed to fetch user', error: err.message });
+  }
+};
+
+// POST /api/users  (Admin: "Add User" / "Create Login")
+exports.createUser = async (req, res) => {
+  try {
+    const {
+      name,
+      loginEmail,
+      userEmail,
+      password,
+      role,
+      contactNumber,
+      zone,
+      state,
+      hq,
+      reportingManagerEmail,
+      agency,
+      rbm,
+      team,
+      profilePicture,
+    } = req.body;
+
+    const pictureUrl = typeof profilePicture === 'string' ? profilePicture.trim() : '';
+    if (pictureUrl && !/^https:\/\//i.test(pictureUrl)) {
+      return res.status(400).json({ message: 'Invalid image address' });
+    }
+
+    if (!name || !loginEmail || !userEmail || !password) {
+      return res.status(400).json({ message: 'Name, login email, user email and password are required' });
+    }
+    if (loginEmail.toLowerCase().trim() !== userEmail.toLowerCase().trim()) {
+      return res.status(400).json({ message: 'Login Email and User Email must match exactly' });
+    }
+
+    const existing = await User.findOne({ loginEmail: loginEmail.toLowerCase().trim() });
+    if (existing) return res.status(409).json({ message: 'A user with this login email already exists' });
+
+    const prtId = await generateId(User, 'prtId', 'PRT', { withYear: false, padding: 4 });
+
+    const user = await User.create({
+      prtId,
+      name,
+      loginEmail: loginEmail.toLowerCase().trim(),
+      userEmail: userEmail.toLowerCase().trim(),
+      password,
+      role: role || 'prt',
+      contactNumber,
+      zone,
+      state,
+      hq,
+      reportingManagerEmail,
+      agency,
+      rbm,
+      team,
+      profilePicture: pictureUrl,
+    });
+
+    const obj = user.toObject();
+    delete obj.password;
+    res.status(201).json(obj);
+  } catch (err) {
+    res.status(500).json({ message: 'Failed to create user', error: err.message });
+  }
+};
+
+// PUT /api/users/:id  ("Edit PRT Data")
+exports.updateUser = async (req, res) => {
+  try {
+    const { name, loginEmail, reportingManagerEmail, zone, isInactive, contactNumber, state, hq, canCreateSessions, profilePicture } = req.body;
+    const user = await User.findById(req.params.id);
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
+    if (name !== undefined) user.name = name;
+    if (loginEmail !== undefined) user.loginEmail = loginEmail.toLowerCase().trim();
+    if (reportingManagerEmail !== undefined) user.reportingManagerEmail = reportingManagerEmail;
+    if (zone !== undefined) user.zone = zone;
+    if (isInactive !== undefined) user.isInactive = isInactive;
+    if (contactNumber !== undefined) user.contactNumber = contactNumber;
+    if (state !== undefined) user.state = state;
+    if (hq !== undefined) user.hq = hq;
+    if (canCreateSessions !== undefined) user.canCreateSessions = canCreateSessions === true;
+    if (profilePicture !== undefined) {
+      // empty string removes the picture
+      const url = typeof profilePicture === 'string' ? profilePicture.trim() : '';
+      if (url && !/^https:\/\//i.test(url)) return res.status(400).json({ message: 'Invalid image address' });
+      user.profilePicture = url;
+    }
+
+    await user.save();
+    const obj = user.toObject();
+    delete obj.password;
+    res.json(obj);
+  } catch (err) {
+    res.status(500).json({ message: 'Failed to update user', error: err.message });
+  }
+};
+
+// PUT /api/users/session-access  (Admin — grant / revoke session scheduling in bulk)
+// body: { userIds: [..], canCreateSessions: true | false }
+exports.setSessionAccessBulk = async (req, res) => {
+  try {
+    const { userIds, canCreateSessions } = req.body;
+    if (typeof canCreateSessions !== 'boolean') {
+      return res.status(400).json({ message: 'canCreateSessions must be true or false' });
+    }
+    if (!Array.isArray(userIds) || userIds.length === 0) {
+      return res.status(400).json({ message: 'Select at least one user' });
+    }
+    const ids = [...new Set(userIds.map(String))];
+    if (ids.length > 1000 || ids.some((i) => !/^[a-f\d]{24}$/i.test(i))) {
+      return res.status(400).json({ message: 'Invalid user selection' });
+    }
+
+    // Only PRTs and doctors can hold this permission (admins always can schedule)
+    const result = await User.updateMany(
+      { _id: { $in: ids }, role: { $in: ['prt', 'doctor'] } },
+      { $set: { canCreateSessions } }
+    );
+    res.json({ matched: result.matchedCount, modified: result.modifiedCount, canCreateSessions });
+  } catch (err) {
+    res.status(500).json({ message: 'Failed to update session access', error: err.message });
+  }
+};
+
+// DELETE /api/users/:id
+exports.deleteUser = async (req, res) => {
+  try {
+    const user = await User.findByIdAndDelete(req.params.id);
+    if (!user) return res.status(404).json({ message: 'User not found' });
+    res.json({ message: 'User deleted' });
+  } catch (err) {
+    res.status(500).json({ message: 'Failed to delete user', error: err.message });
+  }
+};
+
+// GET /api/users/prt-stats  (Dashboard "Registration Data" table: PRT | Total Patients | Total Sessions)
+// Scoped by role: admin = all PRTs, PRT = only themselves.
+exports.getPrtStats = async (req, res) => {
+  try {
+    // Admin sees every PRT; a PRT only ever sees their own row.
+    const prtFilter = req.user.role === 'admin' ? { role: 'prt' } : { _id: req.user._id, role: 'prt' };
+    const prts = await User.find(prtFilter).lean();
+
+    const stats = await Promise.all(
+      prts.map(async (prt) => {
+        const totalPatients = await Patient.countDocuments(Patient.handledBy(prt._id));
+        const patientIds = await Patient.find(Patient.handledBy(prt._id)).distinct('_id');
+        const totalSessions = await Session.countDocuments({ patient: { $in: patientIds } });
+        return {
+          _id: prt._id,
+          prtName: prt.name,
+          zone: prt.zone,
+          totalPatients,
+          totalSessions,
+        };
+      })
+    );
+
+    res.json(stats);
+  } catch (err) {
+    res.status(500).json({ message: 'Failed to compute PRT stats', error: err.message });
+  }
+};
+
+// GET /api/users/prt-ratings  (Admin only)
+// Patients rate their PRT. Returns the average star rating per PRT (across every rating
+// their patients have given) and per patient, keyed by id:
+//   { byPrt: { [prtId]: { average, count } }, byPatient: { [patientId]: { average, count } } }
+exports.getPrtRatings = async (req, res) => {
+  try {
+    const perPatient = await Rating.aggregate([
+      { $group: { _id: '$patient', sum: { $sum: '$stars' }, count: { $sum: 1 } } },
+    ]);
+    const patients = await Patient.find({ _id: { $in: perPatient.map((r) => r._id) } }).select('addedBy assignedPRTs').lean();
+    // A patient's ratings count for every PRT who handles them (registering PRT + assigned PRTs)
+    const prtOf = new Map(patients.map((p) => [String(p._id), [String(p.addedBy), ...(p.assignedPRTs || []).map(String)]]));
+
+    const byPatient = {};
+    const prtTotals = {};
+    perPatient.forEach((r) => {
+      byPatient[r._id] = { average: r.sum / r.count, count: r.count };
+      [...new Set(prtOf.get(String(r._id)) || [])].forEach((prtId) => {
+        prtTotals[prtId] = prtTotals[prtId] || { sum: 0, count: 0 };
+        prtTotals[prtId].sum += r.sum;
+        prtTotals[prtId].count += r.count;
+      });
+    });
+
+    const byPrt = {};
+    Object.entries(prtTotals).forEach(([prtId, t]) => {
+      byPrt[prtId] = { average: t.sum / t.count, count: t.count };
+    });
+
+    res.json({ byPrt, byPatient });
+  } catch (err) {
+    res.status(500).json({ message: 'Failed to fetch ratings', error: err.message });
+  }
+};
+
+// GET /api/users/my-rating  (PRT only)
+// The logged-in PRT's own ratings from their patients:
+//   { average, count, byPatient: { [patientId]: { average, count } } }
+exports.getMyRating = async (req, res) => {
+  try {
+    const patientIds = await Patient.find(Patient.handledBy(req.user._id)).distinct('_id');
+    const perPatient = await Rating.aggregate([
+      { $match: { patient: { $in: patientIds } } },
+      { $group: { _id: '$patient', sum: { $sum: '$stars' }, count: { $sum: 1 } } },
+    ]);
+    const byPatient = {};
+    let sum = 0;
+    let count = 0;
+    perPatient.forEach((r) => {
+      byPatient[r._id] = { average: r.sum / r.count, count: r.count };
+      sum += r.sum;
+      count += r.count;
+    });
+    res.json({ average: count ? sum / count : 0, count, byPatient });
+  } catch (err) {
+    res.status(500).json({ message: 'Failed to fetch your rating', error: err.message });
+  }
+};

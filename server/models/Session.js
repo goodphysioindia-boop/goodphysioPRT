@@ -1,0 +1,50 @@
+const mongoose = require('mongoose');
+
+const sessionSchema = new mongoose.Schema(
+  {
+    sessionId: { type: String, unique: true }, // SES-XXXX
+    patient: { type: mongoose.Schema.Types.ObjectId, ref: 'Patient', required: true },
+    sessionNumber: { type: Number, required: true },
+    sessionType: {
+      type: String,
+      required: true,
+      enum: ['OPD', 'ICU/IPD', 'Home Visit', 'Online', 'Consultation'],
+    },
+    exerciseName: { type: String, trim: true },
+
+    // When the session actually took place (set by the PRT; defaults to the time it was
+    // entered). Older records have none and fall back to createdAt wherever it is shown.
+    sessionDate: { type: Date, default: Date.now },
+
+    // Optional: the scheduled (admin-created) session this record belongs to
+    scheduledSession: { type: mongoose.Schema.Types.ObjectId, ref: 'ScheduledSession' },
+
+    // Online session join link — entered by the PRT on the session form,
+    // surfaced to the patient as a "Join" button.
+    meetingLink: { type: String, trim: true },
+
+    preVitals: {
+      // Not schema-required: a Consultation session can skip pre-vitals
+      // entirely (see createSession's conditional check for the other types).
+      spo2Percent: { type: Number },
+      heartRate: { type: Number },
+      bpMmhg: { type: String }, // SYS/DIA
+      remark: { type: String, trim: true },
+    },
+
+    postVitals: {
+      heartRate: { type: Number },
+      bpMmhg: { type: String },
+      respirationRate: { type: Number },
+      sixMwtMeters: { type: Number },
+      eq5d3lScore: { type: String }, // 5-digit string e.g. 32132
+      remark: { type: String, trim: true },
+    },
+
+    status: { type: String, enum: ['pre-only', 'complete'], default: 'pre-only' },
+    recordedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  },
+  { timestamps: true }
+);
+
+module.exports = mongoose.model('Session', sessionSchema);
